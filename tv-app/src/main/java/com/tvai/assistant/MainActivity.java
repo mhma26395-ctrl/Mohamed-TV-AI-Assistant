@@ -496,6 +496,7 @@ public class MainActivity extends Activity {
 
     protected void sendToAi(String message) {
         String normalizedRequest = normalize(message);
+        if (tryHandleLiveInfo(message, normalizedRequest)) return;
         if (has(normalizedRequest,
                 "التطبيقات اللي شغاله في الخلفيه", "التطبيقات الشغاله في الخلفيه",
                 "تطبيقات الخلفيه", "ايه التطبيقات المفتوحه", "التطبيقات المفتوحه",
