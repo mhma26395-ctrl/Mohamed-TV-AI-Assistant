@@ -605,15 +605,18 @@ public class MainActivity extends Activity {
                     reply("تم تنفيذ أمر الصوت.");
                 } else if ("open_settings".equals(name)) {
                     String page = args.optString("page", "general");
-                    Intent intent;
-                    if ("wifi".equals(page)) intent = new Intent(Settings.ACTION_WIFI_SETTINGS);
-                    else if ("vpn".equals(page)) intent = new Intent(Settings.ACTION_VPN_SETTINGS);
-                    else if ("language".equals(page)) intent = new Intent(Settings.ACTION_LOCALE_SETTINGS);
-                    else if ("display".equals(page)) intent = new Intent(Settings.ACTION_DISPLAY_SETTINGS);
-                    else if ("screensaver".equals(page)) intent = new Intent(Settings.ACTION_DREAM_SETTINGS);
-                    else if ("developer".equals(page)) intent = new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
-                    else intent = new Intent(Settings.ACTION_SETTINGS);
-                    launchIntent(intent, "Settings");
+                    if ("vpn".equals(page)) {
+                        openVpnSettingsOrApp();
+                    } else {
+                        Intent intent;
+                        if ("wifi".equals(page)) intent = new Intent(Settings.ACTION_WIFI_SETTINGS);
+                        else if ("language".equals(page)) intent = new Intent(Settings.ACTION_LOCALE_SETTINGS);
+                        else if ("display".equals(page)) intent = new Intent(Settings.ACTION_DISPLAY_SETTINGS);
+                        else if ("screensaver".equals(page)) intent = new Intent(Settings.ACTION_DREAM_SETTINGS);
+                        else if ("developer".equals(page)) intent = new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
+                        else intent = new Intent(Settings.ACTION_SETTINGS);
+                        launchIntent(intent, "Settings");
+                    }
                 } else if ("list_installed_apps".equals(name)) {
                     showInstalledApps();
                 } else if ("get_storage_info".equals(name)) {
