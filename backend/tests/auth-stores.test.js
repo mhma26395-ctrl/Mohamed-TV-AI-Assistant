@@ -392,3 +392,28 @@ test("pending devices cannot request a session challenge", async () => {
   assert.equal(response.status, 401);
   assert.equal((await response.json()).error, "authentication_failed");
 });
+
+
+test("admin device actions stop when the administrator rate limit is exhausted", async () => {
+  let touchedStore = false;
+  const deny = { limit: async () => ({ success: false }) };
+  const namespace = {
+    idFromName: id => id,
+    get: () => ({ fetch: async () => {
+      touchedStore = true;
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    } })
+  };
+  const env = {
+    DEVICE_ADMIN_SECRET: "A".repeat(48),
+    AUTH_DEVICES: namespace,
+    ADMIN_LIMITER: deny
+  };
+  const response = await worker.fetch(new Request("https://unit.test/v1/admin/devices/approve", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: "Bearer " + env.DEVICE_ADMIN_SECRET },
+    body: JSON.stringify({ installId })
+  }), env);
+  assert.equal(response.status, 429);
+  assert.equal(touchedStore, false);
+});
