@@ -37,15 +37,23 @@ Both classes are exported from `backend/worker.js`. The four rate-limit bindings
 
 ## Staging setup (deploy only after review)
 
-The staging Worker name is `mohamed-tv-ai-backend-staging`. Wrangler environments do not inherit secrets, vars, or bindings. Add three separate staging secrets directly from a trusted terminal (never paste values into GitHub or chat):
+The staging Worker name is `mohamed-tv-ai-backend-staging`. Wrangler environments do not inherit secrets, vars, or bindings. Run these commands from the `backend` directory after confirming the sample rate-limit namespace IDs are unused in your Cloudflare account:
 
 ```sh
-wrangler secret put SESSION_SIGNING_SECRET --env staging
-wrangler secret put GROQ_API_KEY --env staging
-wrangler secret put DEVICE_ADMIN_SECRET --env staging
+# Validate only; this does not publish anything.
+npx wrangler deploy --dry-run --env staging --config wrangler.toml
+
+# First staging deployment creates the isolated Worker and Durable Object namespaces.
+# Until secrets are added, authentication and AI routes intentionally return HTTP 503.
+npx wrangler deploy --env staging --config wrangler.toml
+
+# Add staging-only secrets interactively. Never paste their values into GitHub or chat.
+npx wrangler secret put SESSION_SIGNING_SECRET --env staging --config wrangler.toml
+npx wrangler secret put GROQ_API_KEY --env staging --config wrangler.toml
+npx wrangler secret put DEVICE_ADMIN_SECRET --env staging --config wrangler.toml
 ```
 
-For the default environment, use the same commands without `--env staging`. Keep staging and production values different. The staging Durable Object migration is tagged `auth-staging-v1`; the default migration remains `auth-v1`. Validate the staging configuration with `npx wrangler deploy --dry-run --env staging --config wrangler.toml` before any real deployment. A dry run does not publish a Worker.
+Each secret is entered at the terminal prompt and stored encrypted by Cloudflare. Keep staging values different from production. The staging Durable Object migration is tagged `auth-staging-v1`; the default migration remains `auth-v1`. Do not run a default-environment/production deploy during this staging step. The first staging deployment is intentionally safe without secrets because protected routes fail closed with HTTP 503; after all three secrets are added, begin integration tests.
 
 ## Required secrets
 
@@ -80,7 +88,7 @@ To revoke an installation, invoke the `revoke` operation on the Durable Object i
 
 ## Deployment gate
 
-Do not deploy until all six bindings and all three secrets are configured, then test all enrollment/session and API flows against a staging Worker. The current Worker deliberately returns `503` when required bindings are missing. `AUTH_DEVICES` and `AUTH_CHALLENGES` are declared for both environments in `backend/wrangler.toml`; ensure the matching migration is applied. No staging or production deployment was performed as part of the source changes.
+Do not deploy the default/production environment until all six bindings and all three production secrets are configured. For staging only, the first deployment may intentionally occur before secrets are added because protected routes fail closed with HTTP 503; add all three staging secrets immediately afterward, then test all enrollment/session and API flows. The current Worker deliberately returns `503` when required bindings are missing. `AUTH_DEVICES` and `AUTH_CHALLENGES` are declared for both environments in `backend/wrangler.toml`; ensure the matching migration is applied. No staging or production deployment was performed as part of the source changes.
 
 
 ## Administrator device actions
