@@ -7,6 +7,7 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
     <queries>
+        <package android:name="moe.shizuku.privileged.api" />
         <package android:name="com.google.android.youtube.tv" />
         <package android:name="com.google.android.youtube" />
         <package android:name="com.android.vending" />
@@ -15,6 +16,13 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <application android:allowBackup="false" android:label="Mohamed TV AI Assistant" android:theme="@style/AppTheme">
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
         <service
             android:name=".RemoteKeyProbeService"
             android:label="Mohamed TV AI Remote Key Test"
