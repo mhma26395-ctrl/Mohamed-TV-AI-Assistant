@@ -849,8 +849,16 @@ public class MainActivity extends Activity {
         startFloatingService();
     }
     private void startFloatingService() {
-        try { startService(new Intent(this, FloatingBubbleService.class)); reply("تم تشغيل الزر العائم. اضغطه لفتح المساعد وبدء التحدث، ثم استخدم زر الرجوع للعودة للتطبيق السابق."); }
-        catch (Exception e) { reply("تعذر تشغيل الزر العائم على هذا الجهاز."); }
+        try {
+            Intent serviceIntent = new Intent(this, FloatingBubbleService.class);
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent);
+            else startService(serviceIntent);
+            reply("أرسلت طلب تشغيل الزر العائم. إذا لم يظهر، فقد يمنع نظام التلفزيون خدمة الظهور فوق التطبيقات أو الخدمة الأمامية.");
+        } catch (SecurityException | IllegalStateException e) {
+            reply("رفض Android تشغيل الخدمة العائمة. تحقق من إذن الظهور فوق التطبيقات وإعدادات النظام.");
+        } catch (Exception e) {
+            reply("تعذر إرسال طلب تشغيل الزر العائم على هذا الجهاز.");
+        }
     }
     @Override protected void onResume() {
         super.onResume();
