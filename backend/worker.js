@@ -366,7 +366,17 @@ async function verifySession(token, secret, env) {
     return claims;
   } catch { return null; }
 }
-async function useDeviceStore(env, installId, operation, device) {\n  if (!env.AUTH_DEVICES) throw new Error("auth_device_store_unavailable");\n  const stub = env.AUTH_DEVICES.get(env.AUTH_DEVICES.idFromName(installId));\n  const response = await stub.fetch("https://auth-device/" + operation, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ device }) });\n  return await response.json();\n}\nasync function rateLimit(binding, key) {
+async function useDeviceStore(env, installId, operation, device) {
+  if (!env.AUTH_DEVICES) throw new Error("auth_device_store_unavailable");
+  const stub = env.AUTH_DEVICES.get(env.AUTH_DEVICES.idFromName(installId));
+  const response = await stub.fetch("https://auth-device/" + operation, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ device })
+  });
+  return await response.json();
+}
+async function rateLimit(binding, key) {
   if (!binding) return false;
   const result = await binding.limit({ key });
   return !!result.success;
@@ -383,7 +393,6 @@ async function useChallengeStore(env, nonce, operation, payload) {
   return await response.json();
 }
 async function authRoutes(request, env, url) {
-
   const secret = env.SESSION_SIGNING_SECRET;
   if (!env.AUTH_DEVICES || !env.AUTH_CHALLENGES || !secret || secret.length < 32 || !env.ENROLL_LIMITER || !env.RATE_LIMITER) {
     return json({ error: "auth_service_unavailable" }, 503);
@@ -437,7 +446,6 @@ async function authRoutes(request, env, url) {
 }
 
 
-
 export class AuthDeviceStore {
   constructor(state) { this.state = state; }
   async fetch(request) {
@@ -453,8 +461,7 @@ export class AuthDeviceStore {
         const existing = await txn.get("device");
         if (existing) return { ok: false };
         const device = body.device;
-        if (!device || typeof device.publicKey !== "string" || device.publicKey.length > 1000 ||
-            device.status !== "active") return { ok: false };
+        if (!device || typeof device.publicKey !== "string" || device.publicKey.length > 1000 || device.status !== "active") return { ok: false };
         await txn.put("device", device);
         return { ok: true };
       });
@@ -582,9 +589,7 @@ export default {
           model,
           messages: [
             { role: "system", content: SYSTEM_INSTRUCTION },
-            { role: "user", content: body.message.trim() + (Array.isArray(body.installedApps) ? "
-
-INSTALLED_APPS_FROM_DEVICE (actual launchable apps on this TV; use exact packageName): " + JSON.stringify(body.installedApps.slice(0, 150)) : "") }
+            { role: "user", content: body.message.trim() + (Array.isArray(body.installedApps) ? "\\n\\nINSTALLED_APPS_FROM_DEVICE (actual launchable apps on this TV; use exact packageName): " + JSON.stringify(body.installedApps.slice(0, 150)) : "") }
           ],
           tools: TOOLS,
           tool_choice: "auto",
