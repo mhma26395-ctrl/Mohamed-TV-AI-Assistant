@@ -337,10 +337,12 @@ public class MainActivity extends Activity {
     private void sendToAi(String message) {
         String token = getPreferences(MODE_PRIVATE).getString("access_token", "").trim();
         if (token.isEmpty()) { reply("احفظ Access Token أولاً من خانة الاتصال."); return; }
-        setStatus("Connecting to AI… / جاري الاتصال…");
+        setStatus("Preparing request… / تجهيز الطلب…");
         network.execute(() -> {
             HttpURLConnection connection = null;
+            String stage = "opening_connection";
             try {
+                runOnUiThread(() -> setStatus("Connecting to server… / الاتصال بالخادم…"));
                 connection = (HttpURLConnection) new URL(API_URL).openConnection();
                 connection.setRequestMethod("POST");
                 connection.setConnectTimeout(20000);
@@ -360,9 +362,13 @@ public class MainActivity extends Activity {
                     appContext.append(line);
                 }
                 payload.put("message", message + appContext.toString());
+                stage = "sending_request";
+                runOnUiThread(() -> setStatus("Sending command… / إرسال الأمر…"));
                 try (OutputStream out = connection.getOutputStream()) {
                     out.write(payload.toString().getBytes(StandardCharsets.UTF_8));
                 }
+                stage = "waiting_for_server";
+                runOnUiThread(() -> setStatus("Waiting for AI response… / انتظار رد المساعد…"));
                 int code = connection.getResponseCode();
                 java.io.InputStream stream = code >= 200 && code < 400 ? connection.getInputStream() : connection.getErrorStream();
                 java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
@@ -382,7 +388,8 @@ public class MainActivity extends Activity {
                     if (calls != null) executeAiTools(calls);
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> reply("فشل الاتصال بالخادم. تحقق من الإنترنت ومفتاح الاتصال."));
+                String detail = stage + ": " + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : " - " + e.getMessage());
+                runOnUiThread(() -> reply("خطأ اتصال: " + detail));
             } finally {
                 if (connection != null) connection.disconnect();
             }
