@@ -172,7 +172,8 @@ The manual `APP_ACCESS_TOKEN` entry is a development-only mechanism and must not
 - [x] Move device records and single-use challenges to transactional Durable Objects; tighten JWT claim validation and DER ECDSA signature parsing.
 - [x] Add backend source-check workflow for JavaScript syntax and Wrangler dry-run validation.
 - [x] Remove manual Access Token entry UI and legacy token reads; clear old saved token preferences at app startup.
-- [x] Document Cloudflare binding/secret setup, rate-limit guidance, revocation, and known limitations in `backend/SECURITY-DEPLOYMENT.md`.
+- [x] Document Cloudflare binding/secret setup, rate-limit guidance, administrator approval/revocation workflow, and known limitations in `backend/SECURITY-DEPLOYMENT.md`.
+- [x] Add pending-by-default enrollment, protected administrator approval/revocation routes, and automated tests for pending/revoked device restrictions (backend CI passed on 2026-11-10).
 - [ ] Configure Cloudflare staging bindings and secrets; run Worker endpoint tests.
 - [ ] Compile Android app and test Keystore key generation/signing on Android TV devices.
 - [ ] Test enrollment, challenge replay, invalid signatures, session expiry, revocation, key rotation, quota enforcement, and concurrent requests.
