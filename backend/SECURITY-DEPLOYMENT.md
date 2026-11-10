@@ -12,7 +12,7 @@ Configure these in the Cloudflare Worker environment (Production and Preview sep
 | `ENROLL_LIMITER` | Rate limiting binding | Per-IP and global throttling for enrollment/challenge/session issuance |
 | `RATE_LIMITER` | Rate limiting binding | Per-IP API throttling |
 | `DEVICE_RATE_LIMITER` | Rate limiting binding | Per-installation API throttling |
-| `ADMIN_LIMITER` | Rate limiting binding | Per-IP throttling for administrative revocation |
+| `ADMIN_LIMITER` | Rate limiting binding | Per-IP throttling for administrative approval and revocation |
 
 Set rate-limit thresholds conservatively. Suggested starting policy: enrollment 3 requests per IP per 10 minutes and a global enrollment ceiling; session issuance 20 per IP per 10 minutes; API requests 30 per device per minute and 60 per IP per minute. Adapt after observing real usage and Cloudflare plan limits. The exact limit/window configuration is managed in Cloudflare, not in this source file.
 
@@ -32,7 +32,7 @@ tag = "auth-v1"
 new_sqlite_classes = ["AuthChallengeStore", "AuthDeviceStore"]
 ```
 
-Both classes are exported from `backend/worker.js`. Configure the three rate-limit bindings listed above in the Cloudflare dashboard; never commit secret values.
+Both classes are exported from `backend/worker.js`. Configure all four rate-limit bindings listed above in the Cloudflare dashboard; never commit secret values.
 
 ## Required secrets
 
@@ -68,3 +68,28 @@ To revoke an installation, invoke the `revoke` operation on the Durable Object i
 ## Deployment gate
 
 Do not deploy until all six bindings and all three secrets are configured, then test all enrollment/session and API flows against a staging Worker. The current Worker deliberately returns `503` when required bindings are missing. `AUTH_DEVICES` and `AUTH_CHALLENGES` are declared in `backend/wrangler.toml`; ensure the migration `auth-v1` is applied. No production deployment was performed as part of the source changes.
+
+
+## Administrator device actions
+
+New installations are registered as `pending` and cannot request a session until an administrator approves them. The app displays the installation UUID while waiting. From a trusted administrator environment, call the Worker endpoints below. Never call these endpoints from the Android app or expose the admin secret to users.
+
+Approve a pending installation:
+
+```sh
+curl -X POST "https://YOUR-WORKER-DOMAIN/v1/admin/devices/approve" \
+  -H "Authorization: Bearer $DEVICE_ADMIN_SECRET" \
+  -H "Content-Type: application/json" \
+  --data '{"installId":"DEVICE-UUID-SHOWN-IN-APP"}'
+```
+
+Revoke an installation:
+
+```sh
+curl -X POST "https://YOUR-WORKER-DOMAIN/v1/admin/devices/revoke" \
+  -H "Authorization: Bearer $DEVICE_ADMIN_SECRET" \
+  -H "Content-Type: application/json" \
+  --data '{"installId":"DEVICE-UUID-SHOWN-IN-APP"}'
+```
+
+Replace the example domain and UUID before use. Supply the admin secret only through a secure local environment variable. Approval is permitted only from `pending`; a revoked device cannot be re-approved through this endpoint.
