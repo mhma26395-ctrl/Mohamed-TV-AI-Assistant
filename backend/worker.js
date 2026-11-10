@@ -522,7 +522,7 @@ export class AuthDeviceStore {
           return { ok: false };
         }
         const device = body.device;
-        if (!device || typeof device.publicKey !== "string" || device.publicKey.length > 1000 || device.status !== "active") return { ok: false };
+        if (!device || typeof device.publicKey !== "string" || device.publicKey.length < 80 || device.publicKey.length > 1000 || device.status !== "pending") return { ok: false };
         await txn.put("device", device);
         return { ok: true, status: device.status, alreadyRegistered: false };
       });
