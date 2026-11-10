@@ -15,6 +15,20 @@ Configure these in the Cloudflare Worker environment (Production and Preview sep
 
 Set rate-limit thresholds conservatively. Suggested starting policy: enrollment 3 requests per IP per 10 minutes and a global enrollment ceiling; session issuance 20 per IP per 10 minutes; API requests 30 per device per minute and 60 per IP per minute. Adapt after observing real usage and Cloudflare plan limits. The exact limit/window configuration is managed in Cloudflare, not in this source file.
 
+Example Wrangler Durable Object declaration (merge into the existing Worker configuration; do not overwrite existing bindings or migrations):
+
+```toml
+[[durable_objects.bindings]]
+name = "AUTH_CHALLENGES"
+class_name = "AuthChallengeStore"
+
+[[migrations]]
+tag = "auth-challenges-v1"
+new_sqlite_classes = ["AuthChallengeStore"]
+```
+
+The class is exported from `backend/worker.js`. Bind a KV namespace named `DEVICE_REGISTRY` and the three rate-limit bindings listed above as well. Configure the namespace IDs and rate-limit rules in Cloudflare; never commit secret values.
+
 ## Required secrets
 
 - `SESSION_SIGNING_SECRET`: at least 32 cryptographically random bytes, encoded as a long random string. Rotate only with a planned session invalidation.
