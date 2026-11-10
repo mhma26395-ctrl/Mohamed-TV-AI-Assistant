@@ -56,6 +56,13 @@ The app should support two optional elevated-control paths while keeping ordinar
 - Show target app, estimated scope, confirmation, and result before/after where measurable.
 - Keep the existing own-cache cleanup clearly labeled as assistant-only.
 
+### E. Direct device controls (brightness and VPN)
+- Separate **perform the requested action** from **open the relevant settings page**. Opening Display/VPN settings must never be described as having changed brightness or connected a VPN.
+- **Brightness:** first detect whether the TV exposes a supported brightness control. Where Android system brightness is applicable and the user grants the required write-settings access, offer direct brightness adjustment with bounded values and report the actual read-back value. Many TVs expose picture brightness only through manufacturer-specific picture settings; for those models, clearly report that direct control is unsupported and open the picture settings as a fallback.
+- **VPN:** detect installed VPN apps and available supported connection methods. Prefer a documented app deep link/API or an explicit Android VPN consent flow when available. Do not assume that opening the VPN app or VPN settings connects it. If the selected VPN app exposes no supported external control, open it and tell the user to connect manually.
+- Never bypass Android VPN consent, user confirmation, or third-party app security. Never claim VPN is connected unless connection state is independently confirmed by the device.
+- Add clear voice intents for "lower/raise brightness to X" and "connect/disconnect VPN", with status checks and honest fallback behavior.
+
 ### E. Device maintenance and reboot
 - Add only commands supported by the active privilege route and the device.
 - Require explicit confirmation for reboot or other disruptive actions.
