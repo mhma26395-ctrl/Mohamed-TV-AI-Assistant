@@ -27,7 +27,7 @@ import java.util.UUID;
  * No API key, shared secret, or bearer token is stored in the APK or preferences.
  */
 final class DeviceAuth {
-    private static final String BASE = "https://mohamed-tv-ai-backend.mhma26395.workers.dev";
+    private static final String BASE = BuildConfig.BACKEND_BASE_URL;
     private static final String PREFS = "device_identity";
     private static final String ID_KEY = "install_id";
     private static final String ALIAS = "mohamed_tv_ai_device_signing_v1";
