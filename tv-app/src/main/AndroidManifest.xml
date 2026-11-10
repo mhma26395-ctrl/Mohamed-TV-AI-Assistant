@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
@@ -7,6 +8,7 @@
         <package android:name="com.google.android.youtube.tv" />
         <package android:name="com.google.android.youtube" />
         <package android:name="com.android.vending" />
+        <package android:name="com.esaba.downloader" />
     </queries>
     <application android:allowBackup="false" android:label="Mohamed TV AI Assistant" android:theme="@style/AppTheme">
         <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="landscape">
