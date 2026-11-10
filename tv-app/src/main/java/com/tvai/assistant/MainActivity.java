@@ -67,8 +67,8 @@ public class MainActivity extends Activity {
     private Button micButton;
     private EditText messageInput;
     private final ExecutorService network = Executors.newSingleThreadExecutor();
-    private static final String API_URL = "https://mohamed-tv-ai-backend.mhma26395.workers.dev/v1/assistant";
-    private static final String INFO_API_URL = "https://mohamed-tv-ai-backend.mhma26395.workers.dev/v1/info";
+    private static final String API_URL = BuildConfig.BACKEND_BASE_URL + "/v1/assistant";
+    private static final String INFO_API_URL = BuildConfig.BACKEND_BASE_URL + "/v1/info";
     private static final int SHIZUKU_PERMISSION_REQUEST = 7301;
     private final Shizuku.OnBinderReceivedListener shizukuBinderReceived = this::refreshShizukuState;
     private final Shizuku.OnBinderDeadListener shizukuBinderDead = this::refreshShizukuState;
