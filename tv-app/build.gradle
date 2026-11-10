@@ -15,8 +15,8 @@ android {
         applicationId 'com.tvai.assistant.next'
         minSdk 26
         targetSdk 34
-        versionCode 19
-        versionName '0.6.7'
+        versionCode 20
+        versionName '0.6.8'
         buildConfigField 'String', 'BACKEND_BASE_URL', '"https://mohamed-tv-ai-backend.mhma26395.workers.dev"'
     }
     buildTypes {
