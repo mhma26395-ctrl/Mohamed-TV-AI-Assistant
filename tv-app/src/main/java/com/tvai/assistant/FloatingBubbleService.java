@@ -36,7 +36,7 @@ public class FloatingBubbleService extends Service {
         bg.setStroke(3, Color.WHITE);
         bubble.setBackground(bg);
         int type = Build.VERSION.SDK_INT >= 26 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE;
-        params = new WindowManager.LayoutParams(64, 64, type, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT);
+        int bubbleSize = (int)(64 * getResources().getDisplayMetrics().density);\n        params = new WindowManager.LayoutParams(bubbleSize, bubbleSize, type, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.TOP | Gravity.END;
         params.x = 24;
         params.y = 180;
