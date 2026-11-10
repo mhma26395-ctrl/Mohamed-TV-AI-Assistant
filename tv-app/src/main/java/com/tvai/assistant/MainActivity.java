@@ -17,6 +17,16 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
+import android.text.InputType;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -35,11 +45,15 @@ public class MainActivity extends Activity {
     private boolean ttsReady = false;
     private String speechLanguage = "ar-EG";
     private Button micButton;
+    private EditText tokenInput, messageInput;
+    private final ExecutorService network = Executors.newSingleThreadExecutor();
+    private static final String API_URL = "https://mohamed-tv-ai-backend.mhma26395.workers.dev/v1/assistant";
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         buildUi();
+        tokenInput.setText(getPreferences(MODE_PRIVATE).getString("access_token", ""));
         tts = new TextToSpeech(this, result -> {
             if (result == TextToSpeech.SUCCESS) { ttsReady = true; tts.setLanguage(new Locale("ar")); }
         });
@@ -75,6 +89,33 @@ public class MainActivity extends Activity {
         status = label("Ready · جاهز للاستماع");
         root.addView(status);
 
+        tokenInput = new EditText(this);
+        tokenInput.setSingleLine(true);
+        tokenInput.setHint("Access Token (مرة واحدة)");
+        tokenInput.setTextColor(Color.WHITE);
+        tokenInput.setHintTextColor(Color.LTGRAY);
+        tokenInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        root.addView(tokenInput);
+        Button saveToken = button("Save connection token / حفظ مفتاح الاتصال");
+        saveToken.setOnClickListener(v -> {
+            String value = tokenInput.getText().toString().trim();
+            if (value.isEmpty()) { reply("أدخل Access Token أولاً."); return; }
+            getPreferences(MODE_PRIVATE).edit().putString("access_token", value).apply();
+            reply("تم حفظ مفتاح الاتصال على هذا الجهاز.");
+        });
+        root.addView(saveToken);
+        messageInput = new EditText(this);
+        messageInput.setSingleLine(true);
+        messageInput.setHint("اكتب أمرًا للتلفزيون / Type a command");
+        messageInput.setTextColor(Color.WHITE);
+        messageInput.setHintTextColor(Color.LTGRAY);
+        root.addView(messageInput);
+        Button sendButton = button("Send to AI / إرسال للمساعد");
+        sendButton.setOnClickListener(v -> {
+            String message = messageInput.getText().toString().trim();
+            if (!message.isEmpty()) { transcript.setText("You said / قلت: " + message); sendToAi(message); }
+        });
+        root.addView(sendButton);
         micButton = button("🎙  Speak / تحدث");
         micButton.setOnClickListener(v -> startListening());
         root.addView(micButton);
@@ -169,7 +210,7 @@ public class MainActivity extends Activity {
                 ArrayList<String> list = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                 if (list != null && !list.isEmpty()) {
                     transcript.setText("You said / قلت: " + list.get(0));
-                    handleCommand(list.get(0));
+                    sendToAi(list.get(0));
                 }
             }
             public void onPartialResults(Bundle b) {}
@@ -264,6 +305,89 @@ public class MainActivity extends Activity {
         reply("I did not recognize that command yet. Try: open YouTube, Downloader, VPN settings, language settings or network settings. / لم أفهم الأمر بعد. جرّب أمرًا من الأوامر المدعومة أو افتح المساعدة.");
     }
 
+
+    private void sendToAi(String message) {
+        String token = getPreferences(MODE_PRIVATE).getString("access_token", "").trim();
+        if (token.isEmpty()) { reply("احفظ Access Token أولاً من خانة الاتصال."); return; }
+        setStatus("Connecting to AI… / جاري الاتصال…");
+        network.execute(() -> {
+            HttpURLConnection connection = null;
+            try {
+                connection = (HttpURLConnection) new URL(API_URL).openConnection();
+                connection.setRequestMethod("POST");
+                connection.setConnectTimeout(20000);
+                connection.setReadTimeout(45000);
+                connection.setDoOutput(true);
+                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                connection.setRequestProperty("Authorization", "Bearer " + token);
+                JSONObject payload = new JSONObject();
+                payload.put("message", message);
+                try (OutputStream out = connection.getOutputStream()) {
+                    out.write(payload.toString().getBytes(StandardCharsets.UTF_8));
+                }
+                int code = connection.getResponseCode();
+                java.io.InputStream stream = code >= 200 && code < 400 ? connection.getInputStream() : connection.getErrorStream();
+                java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+                byte[] chunk = new byte[2048]; int count;
+                while ((count = stream.read(chunk)) != -1) buffer.write(chunk, 0, count);
+                JSONObject result = new JSONObject(new String(buffer.toByteArray(), StandardCharsets.UTF_8));
+                if (code != 200) {
+                    String error = result.optString("error", "http_" + code);
+                    runOnUiThread(() -> reply("تعذر الاتصال بالمساعد: " + error + " (" + code + ")"));
+                    return;
+                }
+                String answer = result.optString("text", "");
+                JSONArray calls = result.optJSONArray("toolCalls");
+                runOnUiThread(() -> {
+                    if (!answer.isEmpty()) reply(answer);
+                    else if (calls == null || calls.length() == 0) reply("وصل الرد من الذكاء الاصطناعي دون أمر.");
+                    if (calls != null) executeAiTools(calls);
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> reply("فشل الاتصال بالخادم. تحقق من الإنترنت ومفتاح الاتصال."));
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+        });
+    }
+
+    private void executeAiTools(JSONArray calls) {
+        for (int i = 0; i < calls.length(); i++) {
+            JSONObject call = calls.optJSONObject(i);
+            if (call == null) continue;
+            String name = call.optString("name", "");
+            JSONObject args = call.optJSONObject("args");
+            if (args == null) args = new JSONObject();
+            try {
+                if ("launch_app".equals(name)) {
+                    String pkg = args.optString("packageName", "");
+                    if (!pkg.isEmpty()) launchPackage(pkg, args.optString("appName", pkg));
+                } else if ("adjust_volume".equals(name)) {
+                    int steps = Math.max(1, Math.min(5, args.optInt("steps", 1)));
+                    int dir = "down".equals(args.optString("direction")) ? AudioManager.ADJUST_LOWER : AudioManager.ADJUST_RAISE;
+                    AudioManager audio = (AudioManager)getSystemService(AUDIO_SERVICE);
+                    for (int n = 0; n < steps; n++) audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, dir, 0);
+                    reply("تم تنفيذ أمر الصوت.");
+                } else if ("open_settings".equals(name)) {
+                    String page = args.optString("page", "general");
+                    Intent intent;
+                    if ("wifi".equals(page)) intent = new Intent(Settings.ACTION_WIFI_SETTINGS);
+                    else if ("vpn".equals(page)) intent = new Intent(Settings.ACTION_VPN_SETTINGS);
+                    else if ("language".equals(page)) intent = new Intent(Settings.ACTION_LOCALE_SETTINGS);
+                    else if ("display".equals(page)) intent = new Intent(Settings.ACTION_DISPLAY_SETTINGS);
+                    else if ("screensaver".equals(page)) intent = new Intent(Settings.ACTION_DREAM_SETTINGS);
+                    else if ("developer".equals(page)) intent = new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
+                    else intent = new Intent(Settings.ACTION_SETTINGS);
+                    launchIntent(intent, "Settings");
+                } else if ("get_device_info".equals(name)) {
+                    reply("الجهاز: " + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL + " · Android " + android.os.Build.VERSION.RELEASE);
+                } else if ("list_installed_apps".equals(name)) {
+                    reply("قائمة التطبيقات المثبتة لم تُربط بعد.");
+                }
+            } catch (Exception e) { reply("تعذر تنفيذ الأمر على هذا التلفزيون."); }
+        }
+    }
+
     private void adjustVolume(int direction, String message) {
         AudioManager audio = (AudioManager)getSystemService(AUDIO_SERVICE);
         audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, AudioManager.FLAG_SHOW_UI);
@@ -339,6 +463,7 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        network.shutdownNow();
         if (recognizer != null) { recognizer.destroy(); recognizer = null; }
         if (tts != null) { tts.stop(); tts.shutdown(); }
         super.onDestroy();
