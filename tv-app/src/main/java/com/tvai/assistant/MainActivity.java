@@ -603,28 +603,65 @@ public class MainActivity extends Activity {
         String mappedName = prefs.getString("mapped_key_name", "لم يتم اختيار زر");
         boolean enabled = prefs.getBoolean("mapping_enabled", false);
         String state = enabled ? "التخصيص مفعّل" : "التخصيص متوقف";
-        String[] choices = {"اكتشاف زر من الريموت", "تفعيل الزر المختار للمساعد", "إيقاف التخصيص والعودة للسلوك الأصلي", "فتح إعدادات Accessibility", "عرض آخر زر تم اكتشافه"};
-        new AlertDialog.Builder(this).setTitle("تخصيص أزرار الريموت")
-            .setMessage("الزر المختار: " + mappedName + "\\nالحالة: " + state + "\\n\\nملاحظة: بعض الأزرار قد يمنع Firmware الجهاز اعتراضها.")
-            .setItems(choices, (dialog, which) -> {
-                if (which == 0) beginRemoteKeyCapture();
-                else if (which == 1) {
-                    int key = prefs.getInt("captured_key_code", -1);
-                    if (key < 0) reply("اكتشف زرًا أولًا قبل تفعيل التخصيص.");
-                    else {
-                        prefs.edit().putInt("mapped_key_code", key).putString("mapped_key_name", prefs.getString("captured_key_name", "KEYCODE_" + key)).putBoolean("mapping_enabled", true).apply();
-                        reply("تم تفعيل ربط " + prefs.getString("mapped_key_name", "") + " بالمساعد. إذا لم يستقبل النظام الزر فلن يعمل التخصيص.");
-                    }
-                } else if (which == 2) {
-                    prefs.edit().putBoolean("mapping_enabled", false).apply();
-                    reply("تم إيقاف تخصيص الزر. سيُترك الحدث للنظام ليعمل بوظيفته الأصلية.");
-                } else if (which == 3) openRemoteAccessibilitySettings();
-                else {
-                    String name = prefs.getString("last_key_name", "لم يتم رصد زر بعد");
-                    int code = prefs.getInt("last_key_code", -1);
-                    reply("آخر زر مرصود: " + name + " · KEYCODE " + code);
-                }
-            }).show();
+
+        LinearLayout menu = new LinearLayout(this);
+        menu.setOrientation(LinearLayout.VERTICAL);
+        menu.setPadding(28, 12, 28, 12);
+
+        TextView summary = label("الزر المختار: " + mappedName + "\\nالحالة: " + state
+                + "\\n\\nاختر العملية المطلوبة من الأزرار التالية. بعض أزرار الريموت قد يمنع Firmware الجهاز اعتراضها.");
+        menu.addView(summary);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("تخصيص أزرار الريموت")
+                .setView(menu)
+                .setNegativeButton("إغلاق", (d, w) -> d.dismiss())
+                .create();
+
+        Button discover = button("1- اكتشاف زر من الريموت / Discover Key");
+        discover.setOnClickListener(v -> { dialog.dismiss(); beginRemoteKeyCapture(); });
+        menu.addView(discover);
+
+        Button enable = button("2- تفعيل الزر المختار للمساعد / Enable");
+        enable.setOnClickListener(v -> {
+            int key = prefs.getInt("captured_key_code", -1);
+            if (key < 0) {
+                reply("لم يتم اكتشاف زر بعد. اختر اكتشاف زر أولاً ثم اضغط الزر المطلوب في الريموت.");
+                return;
+            }
+            String name = prefs.getString("captured_key_name", "KEYCODE_" + key);
+            prefs.edit().putInt("mapped_key_code", key)
+                    .putString("mapped_key_name", name)
+                    .putBoolean("mapping_enabled", true).apply();
+            dialog.dismiss();
+            reply("تم تفعيل ربط " + name + " بالمساعد. إذا كان Firmware يمنع اعتراض الزر فقد لا يعمل الربط.");
+        });
+        menu.addView(enable);
+
+        Button disable = button("3- إيقاف التخصيص واستعادة الوظيفة الأصلية / Disable");
+        disable.setOnClickListener(v -> {
+            prefs.edit().putBoolean("mapping_enabled", false).apply();
+            dialog.dismiss();
+            reply("تم إيقاف اعتراض الزر. سيُترك للريموت والنظام تنفيذ وظيفتهما الأصلية.");
+        });
+        menu.addView(disable);
+
+        Button accessibility = button("4- فتح إعدادات Accessibility");
+        accessibility.setOnClickListener(v -> { dialog.dismiss(); openRemoteAccessibilitySettings(); });
+        menu.addView(accessibility);
+
+        Button last = button("5- عرض آخر زر تم رصده / Last Key");
+        last.setOnClickListener(v -> {
+            String name = prefs.getString("last_key_name", "لم يتم رصد زر بعد");
+            int code = prefs.getInt("last_key_code", -1);
+            reply("آخر زر مرصود: " + name + " · KEYCODE " + code);
+        });
+        menu.addView(last);
+
+        dialog.show();
+        dialog.getWindow().setLayout(
+                (int)(getResources().getDisplayMetrics().widthPixels * 0.82),
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
     }
 
     private void beginRemoteKeyCapture() {
