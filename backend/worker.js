@@ -362,7 +362,7 @@ async function verifySession(token, secret, env) {
     const now = Math.floor(Date.now()/1000);
     if (claims.iss !== "mohamed-tv-ai" || claims.aud !== "tv-app" || !claims.sub || !Number.isInteger(claims.exp) || claims.exp <= now || claims.exp > now + 901) return null;
     const record = await useDeviceStore(env, claims.sub, "get");
-    if (!record || record.status !== "active") return null;
+    if (!record || !record.ok || !record.device || record.device.status !== "active") return null;
     return claims;
   } catch { return null; }
 }
@@ -397,8 +397,8 @@ async function authRoutes(request, env, url) {
     const purpose = String(body.purpose || "");
     if (!/^[0-9a-f-]{36}$/i.test(id) || !["enroll", "session"].includes(purpose)) return json({ error: "invalid_request" }, 400);
     if (purpose === "session") {
-      const record = await registry.get("device:" + id, "json");
-      if (!record || record.status !== "active") return json({ error: "authentication_failed" }, 401);
+      const record = await useDeviceStore(env, id, "get");
+      if (!record || !record.ok || !record.device || record.device.status !== "active") return json({ error: "authentication_failed" }, 401);
     }
     const nonce = randomToken(32);
     const stored = await useChallengeStore(env, nonce, "create", { installId: id, purpose });
@@ -415,10 +415,8 @@ async function authRoutes(request, env, url) {
     const challenge = await useChallengeStore(env, nonce, "consume", { installId: id, purpose: "enroll" });
     if (!challenge.ok) return json({ error: "authentication_failed" }, 401);
     if (!await verifyDeviceSignature(pub, sig, "enroll|" + id + "|" + nonce)) return json({ error: "authentication_failed" }, 401);
-    const existing = await registry.get("device:" + id, "json");
-    if (existing) return json({ error: "enrollment_not_available" }, 409);
-    const device = { publicKey: pub, status: "active", createdAt: Date.now(), keyVersion: 1 };
-    await registry.put("device:" + id, JSON.stringify(device));
+    const existing = await useDeviceStore(env, id, "register", { publicKey: pub, status: "active", createdAt: Date.now(), keyVersion: 1 });
+    if (!existing.ok) return json({ error: "enrollment_not_available" }, 409);
     return json({ ok: true, enrolled: true });
   }
   if (url.pathname === "/v1/auth/session") {
@@ -427,8 +425,9 @@ async function authRoutes(request, env, url) {
     let body; try { body = await request.json(); } catch { return json({ error: "invalid_request" }, 400); }
     const id = String(body.installId || ""), nonce = String(body.nonce || ""), sig = String(body.signature || "");
     const challenge = await useChallengeStore(env, nonce, "consume", { installId: id, purpose: "session" });
-    const device = await registry.get("device:" + id, "json");
-    if (!challenge.ok || !device || device.status !== "active") return json({ error: "authentication_failed" }, 401);
+    const storedDevice = await useDeviceStore(env, id, "get");
+    const device = storedDevice && storedDevice.device;
+    if (!challenge.ok || !storedDevice.ok || !device || device.status !== "active") return json({ error: "authentication_failed" }, 401);
     if (!await verifyDeviceSignature(device.publicKey, sig, "session|" + id + "|" + nonce)) return json({ error: "authentication_failed" }, 401);
     const now = Math.floor(Date.now()/1000);
     const token = await signSession({ iss: "mohamed-tv-ai", aud: "tv-app", sub: id, iat: now, exp: now + 600 }, secret);
@@ -583,7 +582,9 @@ export default {
           model,
           messages: [
             { role: "system", content: SYSTEM_INSTRUCTION },
-            { role: "user", content: body.message.trim() + (Array.isArray(body.installedApps) ? "\\n\\nINSTALLED_APPS_FROM_DEVICE (actual launchable apps on this TV; use exact packageName): " + JSON.stringify(body.installedApps.slice(0, 150)) : "") }
+            { role: "user", content: body.message.trim() + (Array.isArray(body.installedApps) ? "
+
+INSTALLED_APPS_FROM_DEVICE (actual launchable apps on this TV; use exact packageName): " + JSON.stringify(body.installedApps.slice(0, 150)) : "") }
           ],
           tools: TOOLS,
           tool_choice: "auto",
