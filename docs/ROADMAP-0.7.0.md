@@ -178,7 +178,7 @@ The manual `APP_ACCESS_TOKEN` entry is a development-only mechanism and must not
 - [ ] Compile Android app and test Keystore key generation/signing on Android TV devices.
 - [ ] Test enrollment, challenge replay, invalid signatures, session expiry, revocation, key rotation, quota enforcement, and concurrent requests.
 - [ ] Perform security review/penetration testing and confirm no secrets or private keys leak into APK/logs.
-- **Status:** Authentication source code is committed, but not built, deployed, or validated. The Worker will return 503 until required Cloudflare bindings/secrets are configured. The new backend CI workflow is configured, but its successful run still needs confirmation. This is not a security certification and must not be released yet.
+- **Status:** Authentication source code is committed, but not built, deployed, or validated. The Worker will return 503 until required Cloudflare bindings/secrets are configured. The backend CI workflow completed successfully for the pending/revoked-device tests on 2026-11-10; this validates source-level Worker checks only, not Cloudflare staging or Android hardware behavior. This is not a security certification and must not be released yet.
 
 ### Required design
 - Use an Android Keystore-backed, per-install asymmetric key pair (P-256 / ECDSA SHA-256 for Android API compatibility). The private key must be non-exportable where the platform supports it; never serialize it into preferences, logs, crash reports, or network payloads.
