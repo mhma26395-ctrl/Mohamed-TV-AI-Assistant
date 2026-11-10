@@ -537,12 +537,12 @@ public class MainActivity extends Activity {
                 connection.setRequestProperty("Authorization", "Bearer " + sessionToken);
                 JSONObject payload = new JSONObject();
                 JSONArray installedApps = getInstalledLaunchableAppsJson();
-                StringBuilder appContext = new StringBuilder("\\n\\nACTUAL_INSTALLED_APPS_ON_THIS_TV. Use only exact packageName values below for launch_app; never guess package names. If the requested app is not listed, say so.\\n");
+                StringBuilder appContext = new StringBuilder("\n\nACTUAL_INSTALLED_APPS_ON_THIS_TV. Use only exact packageName values below for launch_app; never guess package names. If the requested app is not listed, say so.\n");
                 int contextLimit = Math.max(0, 3800 - message.length());
                 for (int i = 0; i < installedApps.length() && i < 80; i++) {
                     JSONObject app = installedApps.optJSONObject(i);
                     if (app == null) continue;
-                    String line = app.optString("name") + " | " + app.optString("packageName") + "\\n";
+                    String line = app.optString("name") + " | " + app.optString("packageName") + "\n";
                     if (appContext.length() + line.length() > contextLimit) break;
                     appContext.append(line);
                 }
@@ -691,12 +691,12 @@ public class MainActivity extends Activity {
             return;
         }
         StringBuilder list = new StringBuilder("التطبيقات المتاحة على هذا التلفزيون (")
-                .append(apps.length()).append("):\\n");
+                .append(apps.length()).append("):\n");
         int limit = Math.min(apps.length(), 45);
         for (int i = 0; i < limit; i++) {
             JSONObject app = apps.optJSONObject(i);
             if (app != null) list.append("• ").append(app.optString("name"))
-                    .append("  [").append(app.optString("packageName")).append("]\\n");
+                    .append("  [").append(app.optString("packageName")).append("]\n");
         }
         if (apps.length() > limit) list.append("وباقي التطبيقات: ").append(apps.length() - limit);
         reply(list.toString());
@@ -715,11 +715,11 @@ public class MainActivity extends Activity {
             long total = stats.getTotalBytes();
             long available = stats.getAvailableBytes();
             long used = Math.max(0, total - available);
-            return "تحليل مساحة التخزين الداخلية:\\nالمستخدم: " + formatBytes(used)
-                    + "\\nالمتاح: " + formatBytes(available)
-                    + "\\nالإجمالي: " + formatBytes(total)
-                    + "\\nالنسبة المستخدمة: " + (total > 0 ? (used * 100 / total) : 0) + "%"
-                    + "\\nهذا قياس للمساحة فقط، وليس فحصًا لمحتويات كل الملفات.";
+            return "تحليل مساحة التخزين الداخلية:\nالمستخدم: " + formatBytes(used)
+                    + "\nالمتاح: " + formatBytes(available)
+                    + "\nالإجمالي: " + formatBytes(total)
+                    + "\nالنسبة المستخدمة: " + (total > 0 ? (used * 100 / total) : 0) + "%"
+                    + "\nهذا قياس للمساحة فقط، وليس فحصًا لمحتويات كل الملفات.";
         } catch (Exception e) {
             return "تعذر قراءة إحصاءات مساحة التخزين على هذا الجهاز.";
         }
@@ -727,7 +727,7 @@ public class MainActivity extends Activity {
 
     private String auditInstalledApps() {
         PackageManager pm = getPackageManager();
-        StringBuilder report = new StringBuilder("مراجعة أولية للتطبيقات المثبتة القابلة للتشغيل:\\n");
+        StringBuilder report = new StringBuilder("مراجعة أولية للتطبيقات المثبتة القابلة للتشغيل:\n");
         int scanned = 0, flagged = 0;
         try {
             JSONArray visibleApps = getInstalledLaunchableAppsJson();
@@ -755,15 +755,15 @@ public class MainActivity extends Activity {
                         if (j > 0) report.append(", ");
                         report.append(risky.get(j));
                     }
-                    report.append("\\n");
+                    report.append("\n");
                 }
             }
         } catch (Exception e) {
             return "تعذر إكمال مراجعة التطبيقات القابلة للتشغيل. قد يقيّد إصدار Android الوصول إلى بعض التطبيقات.";
         }
         report.append("عدد تطبيقات المستخدم القابلة للتشغيل التي تمت مراجعتها: ").append(scanned)
-                .append("\\nتطبيقات تحتاج مراجعة إضافية حسب الأذونات: ").append(flagged)
-                .append("\\nتنبيه: تتم مراجعة التطبيقات التي يعرضها Android كقابلة للتشغيل فقط. الأذونات الحساسة لا تثبت وجود فيروس؛ هذا تدقيق مبدئي وليس مضاد فيروسات أو فحصًا للملفات.");
+                .append("\nتطبيقات تحتاج مراجعة إضافية حسب الأذونات: ").append(flagged)
+                .append("\nتنبيه: تتم مراجعة التطبيقات التي يعرضها Android كقابلة للتشغيل فقط. الأذونات الحساسة لا تثبت وجود فيروس؛ هذا تدقيق مبدئي وليس مضاد فيروسات أو فحصًا للملفات.");
         return report.toString();
     }
 
@@ -782,8 +782,8 @@ public class MainActivity extends Activity {
         menu.setOrientation(LinearLayout.VERTICAL);
         menu.setPadding(28, 12, 28, 12);
 
-        TextView summary = label("الزر المختار: " + mappedName + "\\nالحالة: " + state
-                + "\\n\\nالخطوة 1: اضغط «اكتشاف زر» ثم اضغط الزر المطلوب في الريموت مرة واحدة.\\nالخطوة 2: ارجع لهذه القائمة واضغط «تفعيل الزر المختار للمساعد».\\n\\nاكتشاف الزر لا يفعّله تلقائيًا. بعض أزرار الريموت قد يمنع نظام التلفزيون رصدها.");
+        TextView summary = label("الزر المختار: " + mappedName + "\nالحالة: " + state
+                + "\n\nالخطوة 1: اضغط «اكتشاف زر» ثم اضغط الزر المطلوب في الريموت مرة واحدة.\nالخطوة 2: ارجع لهذه القائمة واضغط «تفعيل الزر المختار للمساعد».\n\nاكتشاف الزر لا يفعّله تلقائيًا. بعض أزرار الريموت قد يمنع نظام التلفزيون رصدها.");
         menu.addView(summary);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
@@ -999,7 +999,7 @@ public class MainActivity extends Activity {
             if (recent.isEmpty()) {
                 return "صلاحية Usage Access مفعّلة، لكن لا توجد بيانات استخدام متاحة حتى الآن.";
             }
-            StringBuilder report = new StringBuilder("صلاحية Usage Access مفعّلة. هذه التطبيقات التي سُجّل استخدامها مؤخرًا خلال آخر 7 أيام، مرتبة من الأحدث:\\n");
+            StringBuilder report = new StringBuilder("صلاحية Usage Access مفعّلة. هذه التطبيقات التي سُجّل استخدامها مؤخرًا خلال آخر 7 أيام، مرتبة من الأحدث:\n");
             int count = Math.min(10, recent.size());
             for (int i = 0; i < count; i++) {
                 UsageStats item = recent.get(i);
@@ -1014,9 +1014,9 @@ public class MainActivity extends Activity {
                 else if (age < 60L * 60L * 1000L) when = "منذ " + (age / (60L * 1000L)) + " دقيقة";
                 else if (age < 24L * 60L * 60L * 1000L) when = "منذ " + (age / (60L * 60L * 1000L)) + " ساعة";
                 else when = "منذ " + (age / (24L * 60L * 60L * 1000L)) + " يوم";
-                report.append(i + 1).append(". ").append(label).append(" — ").append(when).append("\\n");
+                report.append(i + 1).append(". ").append(label).append(" — ").append(when).append("\n");
             }
-            report.append("\\nمهم: هذه قائمة بسجل الاستخدام الأخير، وليست كشفًا حيًا بكل التطبيقات التي تعمل في الخلفية. أندرويد لا يتيح للتطبيق العادي معرفة كل العمليات النشطة أو إيقافها. لهذه المهام نحتاج تكامل ADB أو Shizuku بعد إعداد منفصل.");
+            report.append("\nمهم: هذه قائمة بسجل الاستخدام الأخير، وليست كشفًا حيًا بكل التطبيقات التي تعمل في الخلفية. أندرويد لا يتيح للتطبيق العادي معرفة كل العمليات النشطة أو إيقافها. لهذه المهام نحتاج تكامل ADB أو Shizuku بعد إعداد منفصل.");
             return report.toString();
         } catch (Exception e) {
             return "صلاحية Usage Access مفعّلة، لكن تعذرت قراءة سجل الاستخدام من هذا التلفزيون.";
@@ -1078,7 +1078,7 @@ public class MainActivity extends Activity {
     }
     private String getMemoryReport() {
         try { ActivityManager manager=(ActivityManager)getSystemService(ACTIVITY_SERVICE); ActivityManager.MemoryInfo info=new ActivityManager.MemoryInfo(); manager.getMemoryInfo(info); long total=info.totalMem, free=info.availMem, used=Math.max(0,total-free);
-            return "حالة RAM (تقدير النظام):\\nالإجمالي: "+formatBytes(total)+"\\nالمستخدم تقريبًا: "+formatBytes(used)+"\\nالمتاح: "+formatBytes(free)+"\\nنسبة الاستخدام: "+(total>0?used*100/total:0)+"%. هذه قراءة للذاكرة وليست تنظيفًا قسريًا.";
+            return "حالة RAM (تقدير النظام):\nالإجمالي: "+formatBytes(total)+"\nالمستخدم تقريبًا: "+formatBytes(used)+"\nالمتاح: "+formatBytes(free)+"\nنسبة الاستخدام: "+(total>0?used*100/total:0)+"%. هذه قراءة للذاكرة وليست تنظيفًا قسريًا.";
         } catch(Exception e) { return "تعذر قراءة معلومات RAM."; }
     }
     private long directorySize(File dir) {
@@ -1240,7 +1240,7 @@ public class MainActivity extends Activity {
     protected void setStatus(String s) { if (status != null) status.setText(s); }
 
     protected void reply(String s) {
-        String clean = s == null ? "" : s.replace("\\n", "\n").replace("\\r", "");
+        String clean = s == null ? "" : s.replace("\\\\n", "\n").replace("\\\\r", "");
         boolean arabic = clean.matches("(?s).*?[\\u0600-\\u06FF].*");
         response.setText(android.text.BidiFormatter.getInstance(arabic).unicodeWrap(clean));
         response.setTextDirection(arabic ? View.TEXT_DIRECTION_RTL : View.TEXT_DIRECTION_LTR);
