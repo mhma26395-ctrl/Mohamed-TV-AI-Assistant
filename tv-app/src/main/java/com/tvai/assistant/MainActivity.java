@@ -1,6 +1,7 @@
 package com.tvai.assistant;
 
 import android.Manifest;
+import rikka.shizuku.Shizuku;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.ActivityManager;
@@ -69,11 +70,26 @@ public class MainActivity extends Activity {
     private final ExecutorService network = Executors.newSingleThreadExecutor();
     private static final String API_URL = "https://mohamed-tv-ai-backend.mhma26395.workers.dev/v1/assistant";
     private static final String INFO_API_URL = "https://mohamed-tv-ai-backend.mhma26395.workers.dev/v1/info";
+    private static final int SHIZUKU_PERMISSION_REQUEST = 7301;
+    private final Shizuku.OnBinderReceivedListener shizukuBinderReceived = this::refreshShizukuState;
+    private final Shizuku.OnBinderDeadListener shizukuBinderDead = this::refreshShizukuState;
+    private final Shizuku.OnRequestPermissionResultListener shizukuPermissionResult =
+            (requestCode, grantResult) -> {
+                if (requestCode == SHIZUKU_PERMISSION_REQUEST) {
+                    if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                        reply("تم منح Shizuku صلاحية لهذا التطبيق. لم يتم تنفيذ أي أمر بعد؛ الصلاحية جاهزة للاستخدام بعد اختبار كل عملية.");
+                    } else {
+                        reply("لم يتم منح صلاحية Shizuku. ستظل وظائف التطبيق العادية تعمل دونها.");
+                    }
+                    refreshShizukuState();
+                }
+            };
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         buildUi();
+        try { Shizuku.addBinderReceivedListener(shizukuBinderReceived); Shizuku.addBinderDeadListener(shizukuBinderDead); Shizuku.addRequestPermissionResultListener(shizukuPermissionResult); } catch (Exception ignored) {}
         if (getIntent() != null && getIntent().getBooleanExtra("start_voice", false)) new Handler(Looper.getMainLooper()).postDelayed(() -> startListening(), 700);
         String savedToken = getSharedPreferences("assistant_settings", MODE_PRIVATE).getString("access_token", "");
         if (savedToken.isEmpty()) savedToken = getSharedPreferences("MainActivity", MODE_PRIVATE).getString("access_token", "");
@@ -175,6 +191,13 @@ public class MainActivity extends Activity {
             reply("تم إيقاف الزر العائم.");
         });
         root.addView(stopFloating);
+        Button shizukuStatus = button("Shizuku / ADB capability status");
+        shizukuStatus.setOnClickListener(v -> showShizukuStatus());
+        root.addView(shizukuStatus);
+        Button shizukuGrant = button("Connect / authorize Shizuku");
+        shizukuGrant.setOnClickListener(v -> requestShizukuAuthorization());
+        root.addView(shizukuGrant);
+
         Button usage = button("Check Usage Access / فحص إذن التطبيقات");
         usage.setOnClickListener(v -> { if (hasUsageAccess()) reply("إذن Usage Access مفعّل بالفعل."); else openUsageAccessSettings(); });
         root.addView(usage);
@@ -838,6 +861,7 @@ public class MainActivity extends Activity {
     }
     @Override protected void onResume() {
         super.onResume();
+        refreshShizukuState();
         android.content.SharedPreferences probe = getSharedPreferences("remote_key_probe", MODE_PRIVATE);
         int lastKeyCode = probe.getInt("last_key_code", -1);
         if (lastKeyCode >= 0) {
@@ -1073,7 +1097,48 @@ public class MainActivity extends Activity {
         return super.onKeyDown(keyCode,event);
     }
 
+    private void refreshShizukuState() {
+        runOnUiThread(() -> {
+            if (status == null) return;
+            try {
+                if (!Shizuku.pingBinder()) status.setText("Shizuku غير متصل أو لم يبدأ · ADB المباشر غير مضاف بعد");
+                else if (Shizuku.isPreV11()) status.setText("Shizuku يعمل لكن إصداره أقدم من v11 وغير مدعوم");
+                else if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                    int uid = Shizuku.getUid();
+                    status.setText("Shizuku مفوض · " + (uid == 0 ? "Root" : uid == 2000 ? "ADB/Shell" : "UID " + uid) + " · ADB المباشر غير مضاف بعد");
+                } else status.setText("Shizuku يعمل لكن التفويض غير ممنوح · ADB المباشر غير مضاف بعد");
+            } catch (Exception e) { status.setText("تعذر التحقق من Shizuku حاليًا."); }
+        });
+    }
+
+    private void showShizukuStatus() {
+        try {
+            if (!Shizuku.pingBinder()) {
+                reply("Shizuku غير متصل. ثبّت تطبيق Shizuku وافتحه وابدأ الخدمة. على Android 11 فأحدث يمكن تشغيله من Wireless debugging. ثم ارجع إلى هنا.");
+            } else if (Shizuku.isPreV11()) reply("إصدار Shizuku أقدم من v11 وغير مدعوم.");
+            else if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                int uid = Shizuku.getUid();
+                reply("Shizuku متصل والتفويض ممنوح. نوع الصلاحية: " + (uid == 0 ? "Root" : uid == 2000 ? "ADB/Shell" : "UID " + uid) + ". لا يعني ذلك أن كل أوامر النظام مدعومة.");
+            } else reply("Shizuku يعمل، لكن التطبيق لم يحصل على التفويض بعد. استخدم زر طلب التفويض.");
+        } catch (Exception e) { reply("تعذر قراءة حالة Shizuku."); }
+    }
+
+    private void requestShizukuAuthorization() {
+        try {
+            if (!Shizuku.pingBinder()) { reply("ابدأ خدمة Shizuku أولًا ثم أعد المحاولة."); return; }
+            if (Shizuku.isPreV11()) { reply("حدّث Shizuku إلى إصدار v11 أو أحدث."); return; }
+            if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) { reply("التفويض ممنوح بالفعل."); return; }
+            Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST);
+            setStatus("في انتظار موافقة Shizuku…");
+        } catch (Exception e) { reply("تعذر طلب تفويض Shizuku. تأكد أن الخدمة تعمل."); }
+    }
+
     @Override protected void onDestroy() {
+        try {
+            Shizuku.removeBinderReceivedListener(shizukuBinderReceived);
+            Shizuku.removeBinderDeadListener(shizukuBinderDead);
+            Shizuku.removeRequestPermissionResultListener(shizukuPermissionResult);
+        } catch (Exception ignored) {}
         network.shutdownNow();
         if (recognizer != null) { recognizer.destroy(); recognizer = null; }
         if (tts != null) { tts.stop(); tts.shutdown(); }
