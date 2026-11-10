@@ -101,7 +101,6 @@ public class MainActivity extends Activity {
         root.addView(tokenInput);
         Button saveToken = button("Save connection token / حفظ مفتاح الاتصال");
         saveToken.setId(View.generateViewId());
-        saveToken.setNextFocusDownId(messageInput.getId());
         saveToken.setOnClickListener(v -> {
             String value = tokenInput.getText().toString().trim();
             if (value.isEmpty()) { reply("أدخل Access Token أولاً."); return; }
@@ -111,6 +110,7 @@ public class MainActivity extends Activity {
         root.addView(saveToken);
         messageInput = new EditText(this);
         messageInput.setId(View.generateViewId());
+        saveToken.setNextFocusDownId(messageInput.getId());
         messageInput.setFocusable(true);
         messageInput.setFocusableInTouchMode(true);
         messageInput.setNextFocusUpId(saveToken.getId());
