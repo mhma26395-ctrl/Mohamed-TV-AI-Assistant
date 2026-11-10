@@ -76,6 +76,16 @@ The app should support two optional elevated-control paths while keeping ordinar
 - Ensure Back, focus, overlay visibility, and navigation do not trap the user or unexpectedly consume unrelated remote keys.
 - Preserve the existing optional Accessibility-based dedicated remote-key mapping, with a reliable disable/restore-original control.
 
+### H. Live weather and forecasts
+- Support natural Arabic/Egyptian Arabic and English weather questions for an explicitly named city (for example, Cairo) and for the user's location only when location permission/context is available and the user asks for local weather.
+- Fetch current conditions and forecasts from a real weather data provider through the backend; do not rely on the language model's built-in knowledge or invent live temperatures.
+- Prefer a provider that does not require embedding an API key in the APK. Keep provider access server-side and handle provider outages, rate limits, unknown city names, and missing data gracefully.
+- Return location, observation/update time when supplied, temperature, feels-like temperature, condition, humidity, wind, and relevant forecast details only when the provider returns them.
+- Distinguish current conditions from forecast; support at least today's forecast and a multi-day forecast where available.
+- If live weather cannot be fetched, explain the specific temporary limitation instead of saying the assistant is inherently unable to provide weather.
+- Test Arabic city names and common variants (القاهرة/القاهره, الإسكندرية/اسكندرية), English city names, ambiguous place names, unsupported locations, provider timeout, and offline behavior.
+- Do not request precise location permission merely to answer a question that already names a city.
+
 ### G. Assistant language and tool reliability
 - Review Arabic/Egyptian Arabic and English intents and synonyms.
 - Ensure AI tool responses reflect actual device-side results.
