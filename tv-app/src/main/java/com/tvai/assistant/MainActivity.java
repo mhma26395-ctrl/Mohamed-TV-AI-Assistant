@@ -387,9 +387,17 @@ public class MainActivity extends Activity {
     private boolean tryHandleLiveInfo(String raw, String normalized) {
         boolean asksTime = has(normalized, "الوقت", "الساعه كام", "كم الساعه", "time now", "current time", "what time");
         boolean asksWeather = has(normalized, "الطقس", "الجو", "درجه الحراره", "حاله الطقس", "weather", "temperature", "forecast");
-        if (!asksTime && !asksWeather) return false;
+        boolean asksGold = has(normalized, "الذهب", "سعر الذهب", "gold price", "gold rate");
+        boolean asksCurrency = has(normalized, "سعر الدولار", "الدولار اليوم", "سعر العمله", "سعر العملات", "exchange rate", "currency rate", "usd egp", "dollar today");
+        boolean asksNews = has(normalized, "الاخبار", "اخبار", "اخر الاخبار", "news", "headlines");
+        if (!asksTime && !asksWeather && !asksGold && !asksCurrency && !asksNews) return false;
         String city = detectInfoCity(normalized);
-        if (city.isEmpty()) {
+        if (asksNews && city.isEmpty()) {
+            if (has(normalized, "العالم العربي", "الوطن العربي", "arab world")) city = "Arab world";
+            else if (has(normalized, "العالم", "world")) city = "World";
+            else city = "Egypt";
+        }
+        if ((asksTime || asksWeather) && city.isEmpty()) {
             reply("حدد المدينة من فضلك، مثل القاهرة أو لندن أو لوس أنجلوس.");
             return true;
         }
@@ -410,7 +418,7 @@ public class MainActivity extends Activity {
                 JSONObject payload = new JSONObject();
                 payload.put("type", type);
                 payload.put("location", city);
-                payload.put("locale", speechLanguage);
+                payload.put("locale", speechLanguage);\n                if ("currency".equals(type)) { payload.put("from", "USD"); payload.put("to", "EGP"); }\n                if ("gold".equals(type)) payload.put("currency", "EGP");
                 try (OutputStream out = connection.getOutputStream()) {
                     out.write(payload.toString().getBytes(StandardCharsets.UTF_8));
                 }
@@ -427,6 +435,29 @@ public class MainActivity extends Activity {
                 } else if ("time".equals(type)) {
                     answer = "الوقت الآن في " + city + ": " + result.optString("localDateTime") +
                             "\nالمنطقة الزمنية: " + result.optString("timezone");
+                } else if ("currency".equals(type)) {
+                    answer = "سعر الصرف المرجعي: 1 " + result.optString("from") + " = " + result.optString("rate") + " " + result.optString("to") +
+                            "\\nتاريخ السعر: " + result.optString("date") + "\\nالمصدر: Frankfurter. قد تختلف أسعار البنوك والسوق النقدية.";
+                } else if ("gold".equals(type)) {
+                    JSONObject prices = result.optJSONObject("pricePerGram");
+                    answer = "أسعار الذهب التقديرية في مصر بالجنيه للجرام (مشتقة من السعر العالمي):" +
+                            "\\nعيار 24: " + (prices == null ? "—" : prices.optString("24K")) +
+                            "\\nعيار 21: " + (prices == null ? "—" : prices.optString("21K")) +
+                            "\\nعيار 18: " + (prices == null ? "—" : prices.optString("18K")) +
+                            "\\nالمصدر: " + result.optString("source") +
+                            "\\nتنبيه: سعر استرشادي لا يشمل المصنعية أو الضرائب أو هامش محلات الذهب.";
+                } else if ("news".equals(type)) {
+                    StringBuilder news = new StringBuilder("أحدث الأخبار خلال آخر 24 ساعة عن ").append(result.optString("query")).append(":");
+                    JSONArray articles = result.optJSONArray("articles");
+                    if (articles == null || articles.length() == 0) news.append("\\nلم يعثر المصدر على عناوين مناسبة حاليًا.");
+                    else for (int i = 0; i < articles.length(); i++) {
+                        JSONObject item = articles.optJSONObject(i);
+                        if (item != null) news.append("\\n").append(i + 1).append(". ").append(item.optString("title"))
+                                .append(" — ").append(item.optString("source")).append(" (").append(item.optString("publishedAt")).append(")")
+                                .append("\\n").append(item.optString("url"));
+                    }
+                    news.append("\\nالمصدر: GDELT Project");
+                    answer = news.toString();
                 } else {
                     JSONObject current = result.optJSONObject("current");
                     StringBuilder report = new StringBuilder("الطقس الآن في ").append(result.optString("location"))
