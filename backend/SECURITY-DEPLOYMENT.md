@@ -93,16 +93,9 @@ Do not deploy the default/production environment until all six bindings and all 
 
 ## Administrator device actions
 
-New installations are registered as `pending` and cannot request a session until an administrator approves them. The app displays the installation UUID while waiting. From a trusted administrator environment, call the Worker endpoints below. Never call these endpoints from the Android app or expose the admin secret to users.
+New installations are activated automatically after the Worker verifies proof of possession of the installation's Android Keystore private key. The app does not need an administrator approval step. Existing pending installations using the same registered public key are promoted to active on their next valid enrollment retry. A different public key cannot replace an existing installation key, and revoked installations remain revoked and cannot self-reactivate.
 
-Approve a pending installation:
-
-```sh
-curl -X POST "https://YOUR-WORKER-DOMAIN/v1/admin/devices/approve" \
-  -H "Authorization: Bearer $DEVICE_ADMIN_SECRET" \
-  -H "Content-Type: application/json" \
-  --data '{"installId":"DEVICE-UUID-SHOWN-IN-APP"}'
-```
+Administrator revocation remains available from a trusted administrator environment. Never call this endpoint from the Android app or expose the admin secret to users.
 
 Revoke an installation:
 
