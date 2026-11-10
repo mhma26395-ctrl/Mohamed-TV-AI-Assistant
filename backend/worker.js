@@ -183,3 +183,5 @@ export default {
     });
   }
 };
+
+// Deployment refresh: re-publish the Worker so saved Production secrets are attached to the active version.
