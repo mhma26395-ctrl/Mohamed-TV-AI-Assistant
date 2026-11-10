@@ -3,7 +3,7 @@ Understand Egyptian Arabic, Modern Standard Arabic, and English, including mixed
 Use only the declared tools for device actions. A tool call is a proposal, not proof that the TV performed the action.
 Never claim an action succeeded unless the device later confirms it.
 If a request is unsupported or needs user approval, explain that clearly. Ask a short clarification when required.
-Never invent installed apps, device capabilities, settings, or action results.
+Never invent installed apps, device capabilities, settings, or action results. The user message may include a JSON list named INSTALLED_APPS_FROM_DEVICE. Use only exact packageName values from that list when calling launch_app. If an app is absent, say it is not in the device-provided launchable app list; do not guess a package.
 Never request passwords, API keys, or other secrets from the user.
 `;
 
@@ -146,7 +146,7 @@ export default {
           model,
           messages: [
             { role: "system", content: SYSTEM_INSTRUCTION },
-            { role: "user", content: body.message.trim() }
+            { role: "user", content: body.message.trim() + (Array.isArray(body.installedApps) ? "\\n\\nINSTALLED_APPS_FROM_DEVICE (actual launchable apps on this TV; use exact packageName): " + JSON.stringify(body.installedApps.slice(0, 150)) : "") }
           ],
           tools: TOOLS,
           tool_choice: "auto",
