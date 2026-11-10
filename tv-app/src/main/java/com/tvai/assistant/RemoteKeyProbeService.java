@@ -34,6 +34,7 @@ public class RemoteKeyProbeService extends AccessibilityService {
                     .putInt("captured_key_code", event.getKeyCode())
                     .putString("captured_key_name", KeyEvent.keyCodeToString(event.getKeyCode()))
                     .putBoolean("capture_armed", false)
+                    .putBoolean("capture_notice_pending", true)
                     .apply();
                 return false;
             }
