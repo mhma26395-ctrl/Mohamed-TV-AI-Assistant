@@ -577,6 +577,7 @@ public class MainActivity extends Activity {
     protected void sendToAi(String message) {
         String normalizedRequest = normalize(message);
         if (tryHandleSleepTimerRequest(message, normalizedRequest)) return;
+        if (tryHandleLocalAudioCommand(normalizedRequest)) return;
         if (tryHandleLiveInfo(message, normalizedRequest)) return;
         if (tryHandleYouTubeSearch(message, normalizedRequest)) return;
         if (has(normalizedRequest,
