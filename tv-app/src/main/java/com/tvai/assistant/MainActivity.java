@@ -27,7 +27,7 @@ import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Locale;
 
-/** TV starter assistant. Cloud AI and phone pairing are future milestones. */
+/** TV-first assistant. Version 0.2.0 adds normalized Arabic/English command aliases. */
 public class MainActivity extends Activity {
     private TextView status, transcript, response;
     private SpeechRecognizer recognizer;
@@ -89,18 +89,21 @@ public class MainActivity extends Activity {
 
         transcript = label("You said / قلت: —");
         root.addView(transcript);
-        response = label("Assistant / المساعد: Try: Open YouTube, open settings, volume up.");
+        response = label("Assistant / المساعد: Try: افتح يوتيوب، افتح إعدادات VPN، افتح داونلودر.");
         root.addView(response);
         root.addView(label("Quick actions / أوامر سريعة"));
 
         addAction(root, "Open YouTube", "open youtube");
         addAction(root, "Open Google Play", "open play store");
         addAction(root, "Open Settings", "open settings");
+        addAction(root, "VPN settings", "open vpn");
+        addAction(root, "Language settings", "open language settings");
+        addAction(root, "Open Downloader", "open downloader");
         addAction(root, "Volume up", "volume up");
         addAction(root, "Volume down", "volume down");
         addAction(root, "Help / مساعدة", "help");
 
-        TextView foot = label("Version 0.1.1 · Use the remote arrows to move between highlighted buttons. Cloud AI is not connected yet.");
+        TextView foot = label("Version 0.2.0 · Use the remote arrows to move between highlighted buttons. System changes may require your confirmation.");
         foot.setTextSize(13);
         root.addView(foot);
         micButton.requestFocus();
@@ -181,11 +184,15 @@ public class MainActivity extends Activity {
     }
 
     private String normalize(String raw) {
-        String s = raw.toLowerCase(new Locale("ar")).trim();
+        String s = raw.toLowerCase(Locale.ROOT).trim();
         s = Normalizer.normalize(s, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
-        return s.replace("أ","ا").replace("إ","ا").replace("آ","ا")
-                .replace("ى","ي").replace("ة","ه").replace("ـ","")
-                .replaceAll("\\s+", " ");
+        s = s.replace("أ","ا").replace("إ","ا").replace("آ","ا")
+                .replace("ى","ي").replace("ة","ه").replace("ـ","");
+        // Arabic speech engines often transcribe the English acronym VPN phonetically.
+        s = s.replace("في بي ان", " vpn ").replace("في بي اين", " vpn ")
+                .replace("vee pee en", " vpn ").replace("v p n", " vpn ")
+                .replace("داون لودر", "داونلودر");
+        return s.replaceAll("\\s+", " ").trim();
     }
 
     private boolean has(String text, String... terms) {
@@ -196,9 +203,35 @@ public class MainActivity extends Activity {
     private void handleCommand(String raw) {
         String c = normalize(raw);
 
+        if (has(c, "help", "مساعده", "ساعدني", "الاوامر")) {
+            reply("Try: افتح يوتيوب، افتح داونلودر، افتح اعدادات VPN، افتح اعدادات اللغه، افتح اعدادات الشبكه، ارفع الصوت، اخفض الصوت. / Try: open YouTube, Downloader, VPN settings, language settings, network settings, volume up or down.");
+            return;
+        }
+        if (has(c, "vpn", "في بي ان", "شبكه افتراضيه", "برنامج vpn", "اعدادات vpn")) {
+            launchIntent(new Intent(Settings.ACTION_VPN_SETTINGS), "VPN settings",
+                    "تم فتح إعدادات VPN. اختر تطبيق VPN واتصل يدويًا إذا لزم الأمر. / VPN settings opened. Select your VPN and connect manually if needed.");
+            return;
+        }
+        if (has(c, "اللغه", "لغة الجهاز", "غير اللغه", "تغيير اللغه", "اللغه الانجليزيه", "خلي الجهاز انجليزي", "english language", "device language", "language settings")) {
+            launchIntent(new Intent(Settings.ACTION_LOCALE_SETTINGS), "Language settings",
+                    "تم فتح إعدادات اللغة. اختر English يدويًا؛ لا يسمح Android للتطبيق بتغيير لغة النظام مباشرة. / Language settings opened. Select English manually; Android does not allow this app to change the system language directly.");
+            return;
+        }
+        if (has(c, "downloader", "داونلودر", "داونلودر")) {
+            launchPackage("com.esaba.downloader", "Downloader");
+            return;
+        }
         if (has(c, "youtube", "يوتيوب")) { launchYouTube(); return; }
         if (has(c, "play store", "google play", "جوجل بلاي", "متجر")) {
             launchPackage("com.android.vending", "Google Play"); return;
+        }
+        if (has(c, "wifi", "wi-fi", "واي فاي", "الشبكه", "اعدادات الشبكه", "network settings", "internet settings")) {
+            launchIntent(new Intent(Settings.ACTION_WIFI_SETTINGS), "Network settings"); return;
+        }
+        if (has(c, "developer options", "وضع المطورين", "خيارات المطور", "اعدادات المطور")) {
+            launchIntent(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS), "Developer options",
+                    "تم فتح خيارات المطورين. بعض الخيارات تحتاج تفعيلًا يدويًا. / Developer options opened. Some options must be enabled manually.");
+            return;
         }
         if (has(c, "settings", "الاعدادات", "اعدادات", "الضبط", "الاعداد")) {
             launchIntent(new Intent(Settings.ACTION_SETTINGS), "Settings"); return;
@@ -210,26 +243,20 @@ public class MainActivity extends Activity {
             adjustVolume(AudioManager.ADJUST_LOWER, "Volume decreased / تم خفض الصوت"); return;
         }
         if (has(c, "خفض الاضاءه", "قلل الاضاءه", "قلل السطوع", "خفض السطوع", "brightness")) {
-            launchIntent(new Intent(Settings.ACTION_DISPLAY_SETTINGS), "Display settings");
-            return;
+            launchIntent(new Intent(Settings.ACTION_DISPLAY_SETTINGS), "Display settings"); return;
         }
-        if (has(c, "شاشه الاستراحه", "شاشه التوقف", "شاشه الاستراحه", "screensaver", "screen saver")) {
-            launchIntent(new Intent(Settings.ACTION_DREAM_SETTINGS), "Screen saver settings");
-            return;
-        }
-        if (has(c, "لغه الجهاز", "غير اللغه", "تغيير اللغه", "اللغه الانجليزيه", "english language", "device language")) {
-            launchIntent(new Intent(Settings.ACTION_LOCALE_SETTINGS), "Language settings");
-            return;
+        if (has(c, "شاشه الاستراحه", "شاشه التوقف", "screensaver", "screen saver")) {
+            launchIntent(new Intent(Settings.ACTION_DREAM_SETTINGS), "Screen saver settings"); return;
         }
         if (has(c, "اخر تطبيق", "التطبيق السابق", "last app", "previous app", "ارجع للتطبيق")) {
             reply("Android does not allow this app to reopen the previous app directly. Use the TV remote's Recent Apps button / لا يسمح أندرويد بفتح آخر تطبيق مباشرة من هذا التطبيق؛ استخدم زر التطبيقات الأخيرة في الريموت.");
             return;
         }
-        if (has(c, "help", "مساعده", "ساعدني")) {
-            reply("Try: افتح يوتيوب، افتح الاعدادات، ارفع الصوت، اخفض الصوت، خفض الاضاءة، شاشة الاستراحة، لغة الجهاز.");
+        if (has(c, "اعاده تشغيل", "اعد تشغيل التلفزيون", "restart tv", "reboot tv")) {
+            reply("For safety, this app cannot restart the TV. Please use the TV power menu or remote / لأسباب تتعلق بصلاحيات النظام، لا يستطيع التطبيق إعادة تشغيل التلفزيون. استخدم قائمة الطاقة أو الريموت.");
             return;
         }
-        reply("I did not recognize a supported command. Cloud AI is not connected yet / لم أفهم الأمر. الاتصال بالذكاء الاصطناعي السحابي لم يُضف بعد.");
+        reply("I did not recognize that command yet. Try: open YouTube, Downloader, VPN settings, language settings or network settings. / لم أفهم الأمر بعد. جرّب أمرًا من الأوامر المدعومة أو افتح المساعدة.");
     }
 
     private void adjustVolume(int direction, String message) {
@@ -260,11 +287,15 @@ public class MainActivity extends Activity {
         Intent i = getPackageManager().getLaunchIntentForPackage(pkg);
         if (i == null) { reply(name + " is not installed or cannot be launched / التطبيق غير مثبت أو لا يمكن تشغيله"); return; }
         try { startActivity(i); reply("Opening " + name + " / جاري فتح " + name); }
-        catch (Exception e) { reply("Unable to open " + name); }
+        catch (Exception e) { reply("Unable to open " + name + " / تعذر فتح التطبيق"); }
     }
 
     private void launchIntent(Intent i, String name) {
-        try { startActivity(i); reply("Opening " + name + ". Choose the setting on your TV if needed / جاري فتح " + name); }
+        launchIntent(i, name, "Opening " + name + " / جاري فتح " + name);
+    }
+
+    private void launchIntent(Intent i, String name, String message) {
+        try { startActivity(i); reply(message); }
         catch (ActivityNotFoundException e) { reply("This settings page is unavailable on this TV / صفحة الإعدادات غير متاحة على هذا التلفزيون."); }
     }
 
