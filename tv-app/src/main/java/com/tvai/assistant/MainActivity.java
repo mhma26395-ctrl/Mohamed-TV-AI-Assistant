@@ -11,6 +11,12 @@ import java.util.Map;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.StatFs;
+import android.os.Environment;
+import android.content.pm.PackageInfo;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PermissionInfo;
+import java.io.File;
 import android.provider.Settings;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
@@ -406,6 +412,25 @@ public class MainActivity extends Activity {
                     launchIntent(intent, "Settings");
                 } else if ("list_installed_apps".equals(name)) {
                     showInstalledApps();
+                } else if ("get_storage_info".equals(name)) {
+                    reply(getStorageReport());
+                } else if ("audit_apps".equals(name)) {
+                    reply(auditInstalledApps());
+                } else if ("open_usage_access".equals(name)) {
+                    launchIntent(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS), "Usage access");
+                } else if ("open_app_details".equals(name)) {
+                    String pkg = args.optString("packageName", "");
+                    if (isInstalledPackage(pkg)) {
+                        Intent details = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg));
+                        launchIntent(details, "App details");
+                    } else reply("التطبيق غير موجود ضمن التطبيقات المثبتة التي أستطيع التحقق منها.");
+                } else if ("open_app_management".equals(name)) {
+                    launchIntent(new Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS), "App management");
+                } else if ("clear_own_cache".equals(name)) {
+                    long before = directorySize(getCacheDir());
+                    clearDirectory(getCacheDir());
+                    long after = directorySize(getCacheDir());
+                    reply("تم تنظيف كاش المساعد فقط. المساحة التي تم تحريرها تقريبًا: " + formatBytes(Math.max(0, before - after)) + ". لا يشمل ذلك كاش التطبيقات الأخرى.");
                 } else if ("get_device_info".equals(name)) {
                     reply("الجهاز: " + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL + " · Android " + android.os.Build.VERSION.RELEASE);
                 }
@@ -461,6 +486,89 @@ public class MainActivity extends Activity {
         }
         if (apps.length() > limit) list.append("وباقي التطبيقات: ").append(apps.length() - limit);
         reply(list.toString());
+    }
+
+
+    private boolean isInstalledPackage(String pkg) {
+        if (pkg == null || pkg.trim().isEmpty()) return false;
+        try { getPackageManager().getPackageInfo(pkg, 0); return true; }
+        catch (Exception e) { return false; }
+    }
+
+    private String getStorageReport() {
+        try {
+            StatFs stats = new StatFs(Environment.getDataDirectory().getAbsolutePath());
+            long total = stats.getTotalBytes();
+            long available = stats.getAvailableBytes();
+            long used = Math.max(0, total - available);
+            return "تحليل مساحة التخزين الداخلية:\\nالمستخدم: " + formatBytes(used)
+                    + "\\nالمتاح: " + formatBytes(available)
+                    + "\\nالإجمالي: " + formatBytes(total)
+                    + "\\nالنسبة المستخدمة: " + (total > 0 ? (used * 100 / total) : 0) + "%"
+                    + "\\nهذا قياس للمساحة فقط، وليس فحصًا لمحتويات كل الملفات.";
+        } catch (Exception e) {
+            return "تعذر قراءة إحصاءات مساحة التخزين على هذا الجهاز.";
+        }
+    }
+
+    private String auditInstalledApps() {
+        PackageManager pm = getPackageManager();
+        StringBuilder report = new StringBuilder("مراجعة أولية للتطبيقات المثبتة:\\n");
+        int scanned = 0, flagged = 0;
+        try {
+            for (PackageInfo pi : pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)) {
+                if (pi.applicationInfo == null || (pi.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0) continue;
+                scanned++;
+                ArrayList<String> risky = new ArrayList<>();
+                if (pi.requestedPermissions != null) {
+                    for (String permission : pi.requestedPermissions) {
+                        try {
+                            PermissionInfo info = pm.getPermissionInfo(permission, 0);
+                            if ((info.protectionLevel & PermissionInfo.PROTECTION_DANGEROUS) != 0) risky.add(permission);
+                        } catch (Exception ignored) {}
+                    }
+                }
+                if (risky.size() >= 4) {
+                    flagged++;
+                    report.append("مراجعة إضافية مطلوبة: ").append(pi.applicationInfo.loadLabel(pm)).append(" — أذونات حساسة متعددة: ");
+                    for (int i = 0; i < Math.min(4, risky.size()); i++) {
+                        if (i > 0) report.append(", ");
+                        report.append(risky.get(i));
+                    }
+                    report.append("\\n");
+                }
+            }
+        } catch (Exception e) {
+            return "تعذر إكمال مراجعة التطبيقات. قد يقيّد إصدار Android الوصول إلى قائمة التطبيقات.";
+        }
+        report.append("عدد تطبيقات المستخدم التي تمت مراجعتها: ").append(scanned)
+                .append("\\nتطبيقات تحتاج مراجعة إضافية حسب الأذونات: ").append(flagged)
+                .append("\\nتنبيه: الأذونات الحساسة لا تثبت وجود فيروس. هذا تدقيق مبدئي وليس مضاد فيروسات أو فحصًا للملفات.");
+        return report.toString();
+    }
+
+    private long directorySize(File dir) {
+        if (dir == null || !dir.exists()) return 0;
+        if (dir.isFile()) return dir.length();
+        long total = 0;
+        File[] children = dir.listFiles();
+        if (children != null) for (File child : children) total += directorySize(child);
+        return total;
+    }
+
+    private void clearDirectory(File dir) {
+        if (dir == null || !dir.exists()) return;
+        File[] children = dir.listFiles();
+        if (children != null) for (File child : children) {
+            if (child.isDirectory()) clearDirectory(child);
+            try { child.delete(); } catch (Exception ignored) {}
+        }
+    }
+
+    private String formatBytes(long bytes) {
+        if (bytes >= 1024L * 1024L * 1024L) return String.format(Locale.US, "%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0));
+        if (bytes >= 1024L * 1024L) return String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0));
+        return String.format(Locale.US, "%.1f KB", bytes / 1024.0);
     }
 
     private void adjustVolume(int direction, String message) {
