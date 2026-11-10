@@ -159,3 +159,33 @@ The assistant must behave as a useful general-purpose conversational assistant a
 
 ## Current decision
 User approved **both Shizuku and direct ADB over Wi-Fi** for the 0.7.0 consolidated release. No APK should be issued until the combined feature set and validation gates are complete.
+
+
+## Security-first automatic device authentication (mandatory before 0.7.0)
+
+The manual `APP_ACCESS_TOKEN` entry is a development-only mechanism and must not ship in the public app. Do not replace it with a shared token, hard-coded API key, predictable installation ID, or a bearer credential embedded in the APK.
+
+### Required design
+- Use an Android Keystore-backed, per-install asymmetric key pair (P-256 / ECDSA SHA-256 for Android API compatibility). The private key must be non-exportable where the platform supports it; never serialize it into preferences, logs, crash reports, or network payloads.
+- Enroll the public key with the Worker. Treat first enrollment as an abuse-sensitive operation: enforce IP and global registration throttles, cap active installations, and support revocation. A random installation ID is only an identifier, never proof of identity.
+- Authenticate every session issuance/renewal with a fresh server challenge signed by the installation private key. Challenges must be unpredictable, short-lived, single-use, and bound to the installation ID and requested action to prevent replay.
+- Issue short-lived, scoped session credentials only after signature verification. Protect session issuance with server-side signing keys; rotate credentials and reject expired, revoked, malformed, or replayed sessions.
+- Bind authenticated API requests to the enrolled installation and apply per-install, per-IP, and global quotas. Use separate limits for enrollment, assistant inference, and live-information endpoints. Fail closed if required KV/DO/rate-limit bindings or signing secrets are absent.
+- Keep Groq and all server signing/encryption secrets exclusively in Cloudflare secrets. Never commit secrets or return secret values in errors.
+- Store only public key metadata, status, quota counters, and minimal audit data server-side. Do not store voice transcripts or personal content for authentication. Define retention and deletion behavior.
+- Add abuse controls: revoke/block one installation, rotate server keys, cap registrations, detect burst traffic, and return generic authentication errors without leaking whether an installation exists.
+- Remove the manual token UI, token preferences, and all legacy token reads only after both Android and Worker authentication paths are implemented and tested together. During migration, do not silently fall back to the old shared token for public releases.
+
+### Mandatory security tests
+- First enrollment, repeated enrollment, duplicate IDs, malformed/oversized keys, and enrollment floods.
+- Valid signature, invalid signature, wrong key, altered challenge, expired challenge, challenge replay, and cross-install replay.
+- Session expiry, renewal, revoked installation, server key rotation, and missing/failed storage binding.
+- Concurrent requests, per-device/IP/global quota enforcement, and generic error responses.
+- Confirm private keys are non-exportable where supported and never appear in app storage exports, logs, network captures, Git history, or APK strings.
+- Verify the public APK contains no `APP_ACCESS_TOKEN`, `GROQ_API_KEY`, signing secret, or reusable shared credential.
+- Test on representative Android TV/Google TV devices across the app's supported API range; document devices where hardware-backed Keystore is unavailable and the fallback security posture.
+
+### Release gate
+- This authentication work is **not complete** merely because the token field is hidden or removed.
+- Keep the existing development path out of any public release until the replacement protocol is operational end-to-end.
+- Do not build or distribute 0.7.0 until implementation, automated security tests, backend deployment verification, and physical-device validation pass.
