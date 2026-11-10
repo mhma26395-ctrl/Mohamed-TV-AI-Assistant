@@ -558,7 +558,12 @@ public class MainActivity extends Activity {
                 });
             } catch (Exception e) {
                 String detail = stage + ": " + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : " - " + e.getMessage());
-                runOnUiThread(() -> reply("خطأ اتصال: " + detail));
+                if (e.getMessage() != null && e.getMessage().startsWith("device_pending_approval:")) {
+                    String deviceId = e.getMessage().substring("device_pending_approval:".length());
+                    runOnUiThread(() -> reply("تم تسجيل هذا التلفزيون بأمان، لكنه ينتظر موافقة المسؤول قبل تفعيل المساعد. رقم الجهاز: " + deviceId));
+                } else {
+                    runOnUiThread(() -> reply("خطأ اتصال: " + detail));
+                }
             } finally {
                 if (connection != null) connection.disconnect();
             }
