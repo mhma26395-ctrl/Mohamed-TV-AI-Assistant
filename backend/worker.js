@@ -429,7 +429,7 @@ function constantTimeSecretEqual(candidate, expected) {
 
 async function authRoutes(request, env, url) {
   const secret = env.SESSION_SIGNING_SECRET;
-  if (url.pathname === "/v1/admin/devices/revoke") {
+  if (url.pathname === "/v1/admin/devices/revoke" || url.pathname === "/v1/admin/devices/approve") {
     if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
     if (!env.DEVICE_ADMIN_SECRET || env.DEVICE_ADMIN_SECRET.length < 32 || !env.AUTH_DEVICES || !env.ADMIN_LIMITER) return json({ error: "admin_service_unavailable" }, 503);
     const ip = request.headers.get("cf-connecting-ip") || "unknown";
@@ -439,9 +439,10 @@ async function authRoutes(request, env, url) {
     if (!constantTimeSecretEqual(candidate, env.DEVICE_ADMIN_SECRET)) return json({ error: "not_found" }, 404);
     let body; try { body = await request.json(); } catch { return json({ error: "invalid_request" }, 400); }
     if (!isObject(body) || !validInstallId(body.installId)) return json({ error: "invalid_request" }, 400);
-    const result = await useDeviceStore(env, body.installId, "revoke");
-    if (!result || !result.ok) return json({ error: "device_not_found" }, 404);
-    return json({ ok: true, revoked: true });
+    const operation = url.pathname.endsWith("/approve") ? "approve" : "revoke";
+    const result = await useDeviceStore(env, body.installId, operation);
+    if (!result || !result.ok) return json({ error: "device_not_found_or_invalid_state" }, 404);
+    return json({ ok: true, [operation === "approve" ? "approved" : "revoked"]: true });
   }
   if (!env.AUTH_DEVICES || !env.AUTH_CHALLENGES || !secret || secret.length < 32 || !env.ENROLL_LIMITER || !env.RATE_LIMITER) {
     return json({ error: "auth_service_unavailable" }, 503);
@@ -477,9 +478,9 @@ async function authRoutes(request, env, url) {
     const challenge = await useChallengeStore(env, nonce, "consume", { installId: id, purpose: "enroll" });
     if (!challenge.ok) return json({ error: "authentication_failed" }, 401);
     if (!await verifyDeviceSignature(pub, sig, "enroll|" + id + "|" + nonce)) return json({ error: "authentication_failed" }, 401);
-    const existing = await useDeviceStore(env, id, "register", { publicKey: pub, status: "active", createdAt: Date.now(), keyVersion: 1 });
+    const existing = await useDeviceStore(env, id, "register", { publicKey: pub, status: "pending", createdAt: Date.now(), keyVersion: 1 });
     if (!existing.ok) return json({ error: "enrollment_not_available" }, 409);
-    return json({ ok: true, enrolled: true });
+    return json({ ok: true, enrolled: existing.status === "active", pending: existing.status === "pending" });
   }
   if (url.pathname === "/v1/auth/session") {
     if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -516,13 +517,27 @@ export class AuthDeviceStore {
     if (operation === "register") {
       const result = await this.state.storage.transaction(async txn => {
         const existing = await txn.get("device");
-        if (existing) return { ok: false };
+        if (existing) {
+          if (existing.publicKey === body.device?.publicKey) return { ok: true, status: existing.status, alreadyRegistered: true };
+          return { ok: false };
+        }
         const device = body.device;
         if (!device || typeof device.publicKey !== "string" || device.publicKey.length > 1000 || device.status !== "active") return { ok: false };
         await txn.put("device", device);
-        return { ok: true };
+        return { ok: true, status: device.status, alreadyRegistered: false };
       });
       return json(result, result.ok ? 200 : 409);
+    }
+    if (operation === "approve") {
+      const result = await this.state.storage.transaction(async txn => {
+        const device = await txn.get("device");
+        if (!device || device.status !== "pending") return { ok: false };
+        device.status = "active";
+        device.approvedAt = Date.now();
+        await txn.put("device", device);
+        return { ok: true };
+      });
+      return json(result, result.ok ? 200 : 404);
     }
     if (operation === "revoke") {
       const result = await this.state.storage.transaction(async txn => {
