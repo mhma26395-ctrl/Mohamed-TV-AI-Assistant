@@ -1,5 +1,7 @@
 package com.tvai.assistant;
 
+import android.content.Intent;
+
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
