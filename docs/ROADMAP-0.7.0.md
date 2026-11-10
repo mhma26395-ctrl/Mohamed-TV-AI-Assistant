@@ -62,6 +62,8 @@ The app should support two optional elevated-control paths while keeping ordinar
 - If unsupported, open the relevant system settings or explain the limitation; never report success without device confirmation.
 
 ### F. Floating assistant and remote control
+- **Approved tap behavior:** one short press/tap on the floating AI bubble opens the compact assistant and automatically starts voice listening; no extra confirmation/menu is required for the normal one-tap path.
+- Keep the approved one-tap behavior consistent for touch and the remote OK/DPAD_CENTER/ENTER activation.
 - Validate DPAD arrow movement and OK activation on a physical Android TV/Mecool remote.
 - Keep touch dragging as an additional method.
 - Ensure Back, focus, overlay visibility, and navigation do not trap the user or unexpectedly consume unrelated remote keys.
