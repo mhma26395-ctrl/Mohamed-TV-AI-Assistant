@@ -456,7 +456,7 @@ async function authRoutes(request, env, url) {
     const id = body.installId;
     const purpose = body.purpose;
     if (!validInstallId(id) || !["enroll", "session"].includes(purpose)) return json({ error: "invalid_request" }, 400);
-    if (purpose === "enroll" && !await rateLimit(env.ENROLL_LIMITER, "global-enrollment-challenge")) return json({ error: "rate_limited" }, 429);
+    if (purpose === "enroll" && !await rateLimit(env.ENROLL_LIMITER, "enrollment-challenge-per-location")) return json({ error: "rate_limited" }, 429);
     if (purpose === "session") {
       const record = await useDeviceStore(env, id, "get");
       if (!record || !record.ok || !record.device || record.device.status !== "active") return json({ error: "authentication_failed" }, 401);
@@ -469,7 +469,7 @@ async function authRoutes(request, env, url) {
   if (url.pathname === "/v1/auth/enroll") {
     if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
     if (!await rateLimit(env.ENROLL_LIMITER, "enroll:" + ip)) return json({ error: "rate_limited" }, 429);
-    if (!await rateLimit(env.ENROLL_LIMITER, "global-enrollment")) return json({ error: "rate_limited" }, 429);
+    if (!await rateLimit(env.ENROLL_LIMITER, "enrollment-submit-per-location")) return json({ error: "rate_limited" }, 429);
     let body; try { body = await request.json(); } catch { return json({ error: "invalid_request" }, 400); }
     if (!isObject(body)) return json({ error: "invalid_request" }, 400);
     const { installId: id, nonce, publicKey: pub, signature: sig } = body;
