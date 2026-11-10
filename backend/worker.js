@@ -3,7 +3,7 @@ Understand Egyptian Arabic, Modern Standard Arabic, and English, including mixed
 Use only the declared tools for device actions. A tool call is a proposal, not proof that the TV performed the action.
 Never claim an action succeeded unless the device later confirms it.
 If a request is unsupported or needs user approval, explain that clearly. Ask a short clarification when required.
-Never invent installed apps, device capabilities, settings, or action results. The user message may include a JSON list named INSTALLED_APPS_FROM_DEVICE. Use only exact packageName values from that list when calling launch_app. If an app is absent, say it is not in the device-provided launchable app list; do not guess a package.
+Never invent installed apps, device capabilities, settings, or action results. The user message may include a JSON list named INSTALLED_APPS_FROM_DEVICE. Use only exact packageName values from that list when calling launch_app or open_app_details. If an app is absent, say it is not in the device-provided launchable app list; do not guess a package.
 Never request passwords, API keys, or other secrets from the user.
 `;
 
@@ -57,6 +57,53 @@ const TOOLS = [{
       required: ["page"],
       additionalProperties: false
     }
+  }
+}, {
+  type: "function",
+  function: {
+    name: "get_storage_info",
+    description: "Read internal storage totals, used space and available space.",
+    parameters: { type: "object", properties: {}, required: [], additionalProperties: false }
+  }
+}, {
+  type: "function",
+  function: {
+    name: "audit_apps",
+    description: "Run a preliminary permission review of user-installed apps. This is not a malware scan.",
+    parameters: { type: "object", properties: {}, required: [], additionalProperties: false }
+  }
+}, {
+  type: "function",
+  function: {
+    name: "open_usage_access",
+    description: "Open Android Usage Access settings so the user can grant access manually.",
+    parameters: { type: "object", properties: {}, required: [], additionalProperties: false }
+  }
+}, {
+  type: "function",
+  function: {
+    name: "open_app_details",
+    description: "Open Android app details for a verified installed package.",
+    parameters: {
+      type: "object",
+      properties: { packageName: { type: "string" } },
+      required: ["packageName"],
+      additionalProperties: false
+    }
+  }
+}, {
+  type: "function",
+  function: {
+    name: "open_app_management",
+    description: "Open app management settings so the user can review apps and clear app cache manually.",
+    parameters: { type: "object", properties: {}, required: [], additionalProperties: false }
+  }
+}, {
+  type: "function",
+  function: {
+    name: "clear_own_cache",
+    description: "Clear only this assistant app's own cache directory. Never clears other apps' data or cache.",
+    parameters: { type: "object", properties: {}, required: [], additionalProperties: false }
   }
 }, {
   type: "function",
