@@ -32,6 +32,15 @@ public class RemoteKeyProbeService extends AccessibilityService {
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
+        // The XML declares canRequestFilterKeyEvents; the runtime flag is also
+        // required before Android delivers global key events to onKeyEvent().
+        try {
+            android.accessibilityservice.AccessibilityServiceInfo info = getServiceInfo();
+            if (info != null) {
+                info.flags |= android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS;
+                setServiceInfo(info);
+            }
+        } catch (Exception ignored) { }
         android.content.SharedPreferences prefs = getSharedPreferences("remote_key_probe", MODE_PRIVATE);
         if (isProtectedSystemKey(prefs.getInt("mapped_key_code", -1))) {
             prefs.edit().putBoolean("mapping_enabled", false)
