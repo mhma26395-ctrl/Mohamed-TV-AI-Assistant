@@ -70,6 +70,7 @@ public class CompactAssistantActivity extends MainActivity {
         stopBubble.setText("إيقاف الزر العائم نهائياً");
         stopBubble.setAllCaps(false);
         stopBubble.setOnClickListener(v -> {
+            getSharedPreferences("floating_assistant", MODE_PRIVATE).edit().putBoolean("enabled", false).apply();
             Intent stop = new Intent(this, FloatingBubbleService.class);
             stop.setAction("com.tvai.assistant.FLOATING_STOP");
             startService(stop);
@@ -107,8 +108,10 @@ public class CompactAssistantActivity extends MainActivity {
 
     @Override protected void onDestroy() {
         super.onDestroy();
-        Intent show = new Intent(this, FloatingBubbleService.class);
-        show.setAction("com.tvai.assistant.FLOATING_SHOW");
-        try { startService(show); } catch (Exception ignored) {}
+        if (getSharedPreferences("floating_assistant", MODE_PRIVATE).getBoolean("enabled", false)) {
+            Intent show = new Intent(this, FloatingBubbleService.class);
+            show.setAction("com.tvai.assistant.FLOATING_SHOW");
+            try { startService(show); } catch (Exception ignored) {}
+        }
     }
 }
