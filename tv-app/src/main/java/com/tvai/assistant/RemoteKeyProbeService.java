@@ -6,7 +6,6 @@ import android.view.KeyEvent;
 import android.view.accessibility.AccessibilityEvent;
 
 public class RemoteKeyProbeService extends AccessibilityService {
-    // Essential TV keys must never be captured or consumed.
     private boolean isProtectedSystemKey(int keyCode) {
         return keyCode == KeyEvent.KEYCODE_DPAD_UP
                 || keyCode == KeyEvent.KEYCODE_DPAD_DOWN
@@ -35,43 +34,30 @@ public class RemoteKeyProbeService extends AccessibilityService {
         super.onServiceConnected();
         android.content.SharedPreferences prefs = getSharedPreferences("remote_key_probe", MODE_PRIVATE);
         if (isProtectedSystemKey(prefs.getInt("mapped_key_code", -1))) {
-            // Clear unsafe mappings saved by an older build.
-            prefs.edit().putBoolean("mapping_enabled", false).putInt("mapped_key_code", -1)
+            prefs.edit().putBoolean("mapping_enabled", false)
+                    .putInt("mapped_key_code", -1)
                     .putString("mapped_key_name", "لم يتم اختيار زر").apply();
         }
-        // Safety rollback: do not globally intercept TV remote key events.
-        // Some TV firmware can become unstable when an accessibility service filters keys.
     }
 
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
-        // Global key filtering is intentionally disabled for device stability.
-        return false;
-        /* if (event == null) return false;
+        if (event == null) return false;
         int keyCode = event.getKeyCode();
-        // Protected keys pass through unchanged, even while discovering a key.
         if (isProtectedSystemKey(keyCode)) return false;
-
         android.content.SharedPreferences prefs = getSharedPreferences("remote_key_probe", MODE_PRIVATE);
+
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
-            prefs.edit()
-                .putInt("last_key_code", keyCode)
-                .putString("last_key_name", KeyEvent.keyCodeToString(keyCode))
-                .putLong("last_key_time", System.currentTimeMillis())
-                .putInt("last_key_device_id", event.getDeviceId())
-                .putInt("last_key_scan_code", event.getScanCode())
-                .apply();
+            prefs.edit().putInt("last_key_code", keyCode)
+                    .putString("last_key_name", KeyEvent.keyCodeToString(keyCode))
+                    .putLong("last_key_time", System.currentTimeMillis()).apply();
 
             if (prefs.getBoolean("capture_armed", false)) {
                 String keyName = KeyEvent.keyCodeToString(keyCode);
-                prefs.edit()
-                    .putInt("captured_key_code", keyCode)
-                    .putString("captured_key_name", keyName)
-                    .putBoolean("capture_armed", false)
-                    .putBoolean("capture_notice_pending", false)
-                    .apply();
-                // Bring the existing TV activity forward with an explicit result.
-                // MainActivity uses singleTop, so this is delivered through onNewIntent.
+                prefs.edit().putInt("captured_key_code", keyCode)
+                        .putString("captured_key_name", keyName)
+                        .putBoolean("capture_armed", false)
+                        .putBoolean("capture_notice_pending", true).apply();
                 try {
                     Intent result = new Intent(this, MainActivity.class);
                     result.setAction("com.tvai.assistant.REMOTE_KEY_CAPTURED");
@@ -84,23 +70,22 @@ public class RemoteKeyProbeService extends AccessibilityService {
             }
 
             int mapped = prefs.getInt("mapped_key_code", -1);
-            if (prefs.getBoolean("mapping_enabled", false) && mapped >= 0
-                    && keyCode == mapped && event.getRepeatCount() == 0) {
-                try {
-                    Intent launch = new Intent(this, CompactAssistantActivity.class);
-                    launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                    launch.putExtra("start_voice", true);
-                    startActivity(launch);
-                    return true;
-                } catch (Exception ignored) {
-                    return false;
+            if (prefs.getBoolean("mapping_enabled", false) && mapped >= 0 && keyCode == mapped) {
+                if (event.getRepeatCount() == 0) {
+                    try {
+                        Intent launch = new Intent(this, CompactAssistantActivity.class);
+                        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                        launch.putExtra("start_voice", true);
+                        startActivity(launch);
+                    } catch (Exception ignored) { return false; }
                 }
+                return true;
             }
         }
         if (event.getAction() == KeyEvent.ACTION_UP
                 && prefs.getBoolean("mapping_enabled", false)
                 && prefs.getInt("mapped_key_code", -1) == keyCode) return true;
-        return false; */
+        return false;
     }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) { }
