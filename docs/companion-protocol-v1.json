@@ -1,0 +1,51 @@
+{
+  "protocol": "mohamed-tv-companion",
+  "version": 1,
+  "transport": {
+    "mode": "https",
+    "scope": "same-local-network",
+    "certificate": "self-signed-per-tv-installation",
+    "pinning": "certificate-sha256-from-pairing-qr",
+    "plaintext_fallback": false
+  },
+  "pairing": {
+    "method": "qr",
+    "nonce_bytes": 32,
+    "expires_seconds": 120,
+    "single_use": true,
+    "requires_tv_confirmation": true,
+    "phone_identity": "android-keystore-ec-p256",
+    "proof": "ecdsa-sha256",
+    "revoke_supported": true
+  },
+  "session": {
+    "challenge_bytes": 32,
+    "expires_seconds": 300,
+    "request_signing": "ecdsa-sha256",
+    "replay_protection": "monotonic-counter-and-single-use-challenge"
+  },
+  "request": {
+    "required": ["version", "phoneId", "requestId", "counter", "issuedAt", "command", "args", "signature"],
+    "additionalProperties": false
+  },
+  "commands": {
+    "navigation": ["up", "down", "left", "right", "ok", "back", "home"],
+    "media": ["volume_up", "volume_down", "mute"],
+    "assistant": ["ask_text", "ask_voice_transcript"],
+    "apps": ["launch_known_app"]
+  },
+  "forbidden": [
+    "arbitrary_shell",
+    "arbitrary_intent_uri",
+    "arbitrary_package_launch",
+    "shizuku_from_phone",
+    "adb_from_phone",
+    "reboot_without_tv_confirmation",
+    "force_stop_without_tv_confirmation",
+    "cache_clear_without_tv_confirmation"
+  ],
+  "response": {
+    "required": ["version", "requestId", "accepted", "status", "message"],
+    "statuses": ["completed", "rejected", "permission_required", "unsupported", "failed"]
+  }
+}
