@@ -88,6 +88,8 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         buildUi();
+        getSharedPreferences("assistant_settings", MODE_PRIVATE).edit().remove("access_token").apply();
+        getSharedPreferences("MainActivity", MODE_PRIVATE).edit().remove("access_token").apply();
         try { Shizuku.addBinderReceivedListener(shizukuBinderReceived); Shizuku.addBinderDeadListener(shizukuBinderDead); Shizuku.addRequestPermissionResultListener(shizukuPermissionResult); } catch (Exception ignored) {}
         if (getIntent() != null && getIntent().getBooleanExtra("start_voice", false)) new Handler(Looper.getMainLooper()).postDelayed(() -> startListening(), 700);
         tts = new TextToSpeech(this, result -> {
