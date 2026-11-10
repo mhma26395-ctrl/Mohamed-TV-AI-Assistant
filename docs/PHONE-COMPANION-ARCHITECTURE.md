@@ -56,3 +56,8 @@ Voice recognition on the phone is an input method only; execution still occurs o
 - No direct phone-to-Shizuku or phone-to-ADB execution.
 - No unauthenticated LAN endpoint, open WebSocket, or internet-exposed TV control port.
 - No claim that the companion is working until both ends are implemented and tested on physical devices.
+
+
+## Wire protocol
+
+The initial typed protocol is specified in [COMPANION-PROTOCOL-V1.md](COMPANION-PROTOCOL-V1.md), with a machine-readable contract in [companion-protocol-v1.json](companion-protocol-v1.json). The contract requires HTTPS with certificate pinning, one-time QR pairing, Android Keystore phone identity, signed/replay-protected requests, revocation, and a strict command allowlist. These documents define requirements only; they do not mean the transport or pairing implementation is already present.
