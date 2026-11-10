@@ -8,11 +8,21 @@ dependencies {
 android {
     namespace 'com.tvai.assistant'
     compileSdk 35
+    buildFeatures {
+        buildConfig true
+    }
     defaultConfig {
         applicationId 'com.tvai.assistant'
         minSdk 26
         targetSdk 34
         versionCode 14
         versionName '0.6.2'
+        buildConfigField 'String', 'BACKEND_BASE_URL', '"https://mohamed-tv-ai-backend.mhma26395.workers.dev"'
+    }
+    buildTypes {
+        debug {
+            // Debug builds are isolated from production device records and API secrets.
+            buildConfigField 'String', 'BACKEND_BASE_URL', '"https://mohamed-tv-ai-backend-staging.mhma26395.workers.dev"'
+        }
     }
 }
