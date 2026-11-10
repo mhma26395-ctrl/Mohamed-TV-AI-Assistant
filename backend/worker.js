@@ -339,8 +339,13 @@ export default {
     if (url.pathname === "/v1/assistant" && !validRequest(body)) return json({ error: "invalid_request", maxMessageLength: 4000 }, 400);
 
     if (url.pathname === "/v1/info") {
+      if (env.RATE_LIMITER) {
+        const key = request.headers.get("cf-connecting-ip") || "unknown";
+        const decision = await env.RATE_LIMITER.limit({ key });
+        if (!decision.success) return json({ error: "rate_limited" }, 429);
+      }
       const infoBody = body;
-      if (!infoBody || !["time", "weather", "currency", "gold", "news"].includes(infoBody.type) || (infoBody.type !== "gold" && (!infoBody.location || typeof infoBody.location !== "string" || !infoBody.location.trim() || infoBody.location.length > 100))) {
+      if (!infoBody || !["time", "weather", "currency", "gold", "news"].includes(infoBody.type) || (["time", "weather", "news"].includes(infoBody.type) && (!infoBody.location || typeof infoBody.location !== "string" || !infoBody.location.trim() || infoBody.location.length > 100))) {
         return json({ error: "invalid_info_request" }, 400);
       }
       try {
