@@ -22,38 +22,75 @@ public class CompactAssistantActivity extends MainActivity {
         bg.setCornerRadius(22);
         bg.setStroke(2, Color.rgb(0, 190, 220));
         panel.setBackground(bg);
+
         TextView title = new TextView(this);
-        title.setText("Mohamed TV AI  ·  المساعد");
-        title.setTextColor(Color.WHITE); title.setTextSize(17); title.setGravity(Gravity.CENTER);
+        title.setText("Mohamed TV AI · المساعد");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(17);
+        title.setGravity(Gravity.CENTER);
         panel.addView(title);
+
         status = new TextView(this);
-        status.setText("جاهز للاستماع"); status.setTextColor(Color.rgb(120, 225, 245)); status.setTextSize(14);
-        status.setGravity(Gravity.CENTER); status.setPadding(4, 8, 4, 8);
+        status.setText("جاهز للاستماع");
+        status.setTextColor(Color.rgb(120, 225, 245));
+        status.setTextSize(14);
+        status.setGravity(Gravity.CENTER);
+        status.setPadding(4, 8, 4, 8);
         panel.addView(status);
-        tokenInput = new EditText(this);\n        tokenInput.setVisibility(View.GONE);\n        panel.addView(tokenInput);\n        transcript = new TextView(this);\n        transcript.setVisibility(View.GONE);\n        panel.addView(transcript);\n        response = new TextView(this);
-        response.setText("تحدث لإعطاء أمر للتلفزيون"); response.setTextColor(Color.WHITE); response.setTextSize(15);
-        response.setGravity(Gravity.CENTER); response.setTextDirection(View.TEXT_DIRECTION_FIRST_STRONG); response.setMaxLines(5); response.setPadding(6, 4, 6, 8);
+
+        // MainActivity initializes these views after buildUi returns.
+        tokenInput = new EditText(this);
+        tokenInput.setVisibility(View.GONE);
+        panel.addView(tokenInput);
+        transcript = new TextView(this);
+        transcript.setVisibility(View.GONE);
+        panel.addView(transcript);
+
+        response = new TextView(this);
+        response.setText("تحدث لإعطاء أمر للتلفزيون");
+        response.setTextColor(Color.WHITE);
+        response.setTextSize(15);
+        response.setGravity(Gravity.CENTER);
+        response.setTextDirection(View.TEXT_DIRECTION_FIRST_STRONG);
+        response.setMaxLines(5);
+        response.setPadding(6, 4, 6, 8);
         panel.addView(response);
+
         LinearLayout actions = new LinearLayout(this);
         actions.setGravity(Gravity.CENTER);
-        Button mic = new Button(this); mic.setText("🎙 تحدث"); mic.setAllCaps(false);
+        Button mic = new Button(this);
+        mic.setText("🎙 تحدث");
+        mic.setAllCaps(false);
         mic.setOnClickListener(v -> startListening());
         actions.addView(mic, new LinearLayout.LayoutParams(0, -2, 1));
-        Button close = new Button(this); close.setText("إغلاق"); close.setAllCaps(false);
+
+        Button close = new Button(this);
+        close.setText("إغلاق");
+        close.setAllCaps(false);
         close.setOnClickListener(v -> finish());
         actions.addView(close, new LinearLayout.LayoutParams(0, -2, 1));
         panel.addView(actions);
         setContentView(panel);
     }
 
-    @Override protected void reply(String message) {\n        super.reply(message);\n        if (response != null) {\n            boolean arabic = message != null && message.matches("(?s).*[\\\\u0600-\\\\u06FF].*");\n            response.setTextDirection(arabic ? View.TEXT_DIRECTION_FIRST_STRONG_RTL : View.TEXT_DIRECTION_FIRST_STRONG_LTR);\n            response.setGravity(arabic ? Gravity.RIGHT : Gravity.LEFT);\n        }\n    }\n\n    @Override public void onCreate(Bundle state) {
+    @Override protected void reply(String message) {
+        super.reply(message);
+        if (response != null) {
+            boolean arabic = message != null && message.matches("(?s).*[\\u0600-\\u06FF].*");
+            response.setTextDirection(arabic ? View.TEXT_DIRECTION_FIRST_STRONG_RTL : View.TEXT_DIRECTION_FIRST_STRONG_LTR);
+            response.setGravity(arabic ? Gravity.RIGHT : Gravity.LEFT);
+        }
+    }
+
+    @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
         WindowManager.LayoutParams p = getWindow().getAttributes();
         p.width = (int)(getResources().getDisplayMetrics().density * 420);
         p.height = WindowManager.LayoutParams.WRAP_CONTENT;
         p.gravity = Gravity.TOP | Gravity.END;
-        p.x = 22; p.y = 90;
+        p.x = 22;
+        p.y = 90;
         getWindow().setAttributes(p);
         getWindow().setBackgroundDrawableResource(android.R.color.transparent);
     }
