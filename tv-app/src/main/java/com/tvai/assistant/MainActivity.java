@@ -103,7 +103,7 @@ public class MainActivity extends Activity {
         addAction(root, "Volume down", "volume down");
         addAction(root, "Help / مساعدة", "help");
 
-        TextView foot = label("Version 0.2.0 · Use the remote arrows to move between highlighted buttons. System changes may require your confirmation.");
+        TextView foot = label("Version 0.2.1 · Use the remote arrows to move between highlighted buttons. System changes may require your confirmation.");
         foot.setTextSize(13);
         root.addView(foot);
         micButton.requestFocus();
@@ -207,14 +207,14 @@ public class MainActivity extends Activity {
             reply("Try: افتح يوتيوب، افتح داونلودر، افتح اعدادات VPN، افتح اعدادات اللغه، افتح اعدادات الشبكه، ارفع الصوت، اخفض الصوت. / Try: open YouTube, Downloader, VPN settings, language settings, network settings, volume up or down.");
             return;
         }
-        if (has(c, "vpn", "في بي ان", "شبكه افتراضيه", "برنامج vpn", "اعدادات vpn")) {
-            launchIntent(new Intent(Settings.ACTION_VPN_SETTINGS), "VPN settings",
-                    "تم فتح إعدادات VPN. اختر تطبيق VPN واتصل يدويًا إذا لزم الأمر. / VPN settings opened. Select your VPN and connect manually if needed.");
+        if (has(c, "vpn", "في بي ان", "الفي بي ان", "في بي اين", "الفي بي اين", "شبكه افتراضيه", "برنامج vpn", "اعدادات vpn")) {
+            launchIntentWithFallback(new Intent(Settings.ACTION_VPN_SETTINGS), new Intent(Settings.ACTION_WIRELESS_SETTINGS),
+                    "VPN settings", "تم فتح إعدادات الشبكة أو VPN. اختر تطبيق VPN ووافق على الاتصال يدويًا؛ لا يمكن للتطبيق تفعيل VPN دون موافقتك. / VPN or network settings opened. Select your VPN and approve the connection; Android requires your consent.");
             return;
         }
-        if (has(c, "اللغه", "لغة الجهاز", "غير اللغه", "تغيير اللغه", "اللغه الانجليزيه", "خلي الجهاز انجليزي", "english language", "device language", "language settings")) {
-            launchIntent(new Intent(Settings.ACTION_LOCALE_SETTINGS), "Language settings",
-                    "تم فتح إعدادات اللغة. اختر English يدويًا؛ لا يسمح Android للتطبيق بتغيير لغة النظام مباشرة. / Language settings opened. Select English manually; Android does not allow this app to change the system language directly.");
+        if (has(c, "اللغه", "لغه الجهاز", "حول لغه الجهاز", "غير لغه الجهاز", "غير اللغه", "تغيير اللغه", "اللغه الانجليزيه", "للانجليزيه", "انجليزي", "خلي الجهاز انجليزي", "english language", "device language", "language settings")) {
+            launchIntentWithFallback(new Intent(Settings.ACTION_LOCALE_SETTINGS), new Intent(Settings.ACTION_SETTINGS),
+                    "Language settings", "إذا لم تفتح صفحة اللغة مباشرة، افتح إعدادات الجهاز ثم النظام ثم اللغة واختر English. / If the language page is unavailable, open Settings, then System, then Language and choose English.");
             return;
         }
         if (has(c, "downloader", "داونلودر", "داونلودر")) {
@@ -241,6 +241,10 @@ public class MainActivity extends Activity {
         }
         if (has(c, "volume down", "اخفض الصوت", "وطي الصوت", "خفض الصوت", "قلل الصوت")) {
             adjustVolume(AudioManager.ADJUST_LOWER, "Volume decreased / تم خفض الصوت"); return;
+        }
+        if (has(c, "مؤقت النوم", "اضبط مؤقت النوم", "وقت النوم", "sleep timer", "turn off tv in", "اطفي التلفزيون بعد")) {
+            reply("مؤقت إطفاء التلفزيون غير متاح من تطبيق عادي على هذا الجهاز. تحقق من إعدادات الطاقة أو مؤقت النوم الأصلي في التلفزيون. / A regular app cannot power off this TV. Check the TV's built-in Power or Sleep Timer settings.");
+            return;
         }
         if (has(c, "خفض الاضاءه", "قلل الاضاءه", "قلل السطوع", "خفض السطوع", "brightness")) {
             launchIntent(new Intent(Settings.ACTION_DISPLAY_SETTINGS), "Display settings"); return;
@@ -297,6 +301,23 @@ public class MainActivity extends Activity {
     private void launchIntent(Intent i, String name, String message) {
         try { startActivity(i); reply(message); }
         catch (ActivityNotFoundException e) { reply("This settings page is unavailable on this TV / صفحة الإعدادات غير متاحة على هذا التلفزيون."); }
+    }
+
+
+    private void launchIntentWithFallback(Intent primary, Intent fallback, String name, String message) {
+        try {
+            primary.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(primary);
+            reply(message);
+        } catch (Exception first) {
+            try {
+                fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(fallback);
+                reply("تعذر فتح صفحة " + name + " مباشرة؛ فتحت الإعدادات العامة. ابحث عن الخيار يدويًا. / The " + name + " page is unavailable; general settings opened. Find the option manually.");
+            } catch (Exception second) {
+                reply("صفحة " + name + " غير متاحة على هذا التلفزيون. / " + name + " is unavailable on this TV.");
+            }
+        }
     }
 
     private void setStatus(String s) { if (status != null) status.setText(s); }
