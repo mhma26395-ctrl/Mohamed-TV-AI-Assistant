@@ -261,3 +261,44 @@ test("session verification rejects unsupported JWT header algorithms and extra c
   }, secret);
   assert.equal(await verifySession(extraClaim, secret, env), null);
 });
+
+
+test("device revocation endpoint requires admin secret and revokes the selected device", async () => {
+  let revoked = false;
+  const allow = { limit: async () => ({ success: true }) };
+  const namespace = {
+    idFromName: id => id,
+    get: () => ({
+      fetch: async request => {
+        assert.equal(new URL(request.url).pathname, "/revoke");
+        revoked = true;
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+    })
+  };
+  const env = {
+    DEVICE_ADMIN_SECRET: "A".repeat(48),
+    AUTH_DEVICES: namespace,
+    ADMIN_LIMITER: allow
+  };
+  const body = { installId };
+  const unauthorized = await worker.fetch(request("/v1/admin/devices/revoke", body), env);
+  assert.equal(unauthorized.status, 404);
+  assert.equal(revoked, false);
+
+  const authorizedRequest = new Request("https://unit.test/v1/admin/devices/revoke", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: "Bearer " + env.DEVICE_ADMIN_SECRET },
+    body: JSON.stringify(body)
+  });
+  const authorized = await worker.fetch(authorizedRequest, env);
+  assert.equal(authorized.status, 200);
+  assert.equal((await authorized.json()).revoked, true);
+  assert.equal(revoked, true);
+});
+
+test("device revocation endpoint fails closed without its admin limiter", async () => {
+  const env = { DEVICE_ADMIN_SECRET: "A".repeat(48), AUTH_DEVICES: {} };
+  const response = await worker.fetch(request("/v1/admin/devices/revoke", { installId }), env);
+  assert.equal(response.status, 503);
+});
