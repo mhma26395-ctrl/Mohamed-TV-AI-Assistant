@@ -572,8 +572,10 @@ export class AuthChallengeStore {
     if (url.pathname === "/consume") {
       const result = await this.state.storage.transaction(async txn => {
         const challenge = await txn.get("challenge");
+        const now = Date.now();
         if (!challenge || challenge.installId !== body.installId ||
-            challenge.purpose !== body.purpose || Date.now() - challenge.createdAt > 120000) {
+            challenge.purpose !== body.purpose || !Number.isFinite(challenge.createdAt) ||
+            challenge.createdAt > now || now - challenge.createdAt >= 120000) {
           return { ok: false };
         }
         await txn.delete("challenge");
