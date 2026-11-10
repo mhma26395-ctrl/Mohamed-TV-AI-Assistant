@@ -64,7 +64,8 @@ public class MainActivity extends Activity {
     private boolean ttsReady = false;
     protected String speechLanguage = "ar-EG";
     private Button micButton;
-    private EditText tokenInput, messageInput;
+    protected EditText tokenInput;
+    private EditText messageInput;
     private final ExecutorService network = Executors.newSingleThreadExecutor();
     private static final String API_URL = "https://mohamed-tv-ai-backend.mhma26395.workers.dev/v1/assistant";
 
