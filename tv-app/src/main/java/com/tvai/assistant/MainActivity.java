@@ -90,6 +90,9 @@ public class MainActivity extends Activity {
         root.addView(status);
 
         tokenInput = new EditText(this);
+        tokenInput.setId(View.generateViewId());
+        tokenInput.setFocusable(true);
+        tokenInput.setFocusableInTouchMode(true);
         tokenInput.setSingleLine(true);
         tokenInput.setHint("Access Token (مرة واحدة)");
         tokenInput.setTextColor(Color.WHITE);
@@ -97,6 +100,8 @@ public class MainActivity extends Activity {
         tokenInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         root.addView(tokenInput);
         Button saveToken = button("Save connection token / حفظ مفتاح الاتصال");
+        saveToken.setId(View.generateViewId());
+        saveToken.setNextFocusDownId(messageInput.getId());
         saveToken.setOnClickListener(v -> {
             String value = tokenInput.getText().toString().trim();
             if (value.isEmpty()) { reply("أدخل Access Token أولاً."); return; }
@@ -105,12 +110,19 @@ public class MainActivity extends Activity {
         });
         root.addView(saveToken);
         messageInput = new EditText(this);
+        messageInput.setId(View.generateViewId());
+        messageInput.setFocusable(true);
+        messageInput.setFocusableInTouchMode(true);
+        messageInput.setNextFocusUpId(saveToken.getId());
         messageInput.setSingleLine(true);
         messageInput.setHint("اكتب أمرًا للتلفزيون / Type a command");
         messageInput.setTextColor(Color.WHITE);
         messageInput.setHintTextColor(Color.LTGRAY);
         root.addView(messageInput);
         Button sendButton = button("Send to AI / إرسال للمساعد");
+        sendButton.setId(View.generateViewId());
+        messageInput.setNextFocusDownId(sendButton.getId());
+        sendButton.setNextFocusUpId(messageInput.getId());
         sendButton.setOnClickListener(v -> {
             String message = messageInput.getText().toString().trim();
             if (!message.isEmpty()) { transcript.setText("You said / قلت: " + message); sendToAi(message); }
