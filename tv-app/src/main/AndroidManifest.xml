@@ -13,6 +13,7 @@
         <package android:name="com.esaba.downloader" />
     </queries>
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <application android:allowBackup="false" android:label="Mohamed TV AI Assistant" android:theme="@style/AppTheme">
         <service
             android:name=".RemoteKeyProbeService"
