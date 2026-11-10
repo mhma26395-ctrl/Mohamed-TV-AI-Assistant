@@ -34,3 +34,14 @@ jobs:
         run: gradle :tv-app:compileDebugJavaWithJavac
       - name: Run Android lint (no APK)
         run: gradle :tv-app:lintDebug
+
+      - name: Upload Android lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-lint-reports
+          path: |
+            tv-app/build/reports/lint-results-debug.html
+            tv-app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
+          if-no-files-found: warn
+          retention-days: 7
