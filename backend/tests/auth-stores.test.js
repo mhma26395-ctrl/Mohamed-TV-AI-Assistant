@@ -417,3 +417,47 @@ test("admin device actions stop when the administrator rate limit is exhausted",
   assert.equal(response.status, 429);
   assert.equal(touchedStore, false);
 });
+
+
+test("valid first enrollment stores the verified public key as pending", async () => {
+  const pair = await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]
+  );
+  const spki = new Uint8Array(await crypto.subtle.exportKey("spki", pair.publicKey));
+  const publicKey = toBase64Url(spki);
+  const nonce = toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+  const signatureRaw = new Uint8Array(await crypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" }, pair.privateKey,
+    new TextEncoder().encode("enroll|" + installId + "|" + nonce)
+  ));
+  const signature = toBase64Url(rawSignatureToDer(signatureRaw));
+  const allow = { limit: async () => ({ success: true }) };
+  let stored = null;
+  const env = {
+    SESSION_SIGNING_SECRET: "S".repeat(48),
+    ENROLL_LIMITER: allow,
+    RATE_LIMITER: allow,
+    AUTH_CHALLENGES: {
+      idFromName: id => id,
+      get: () => ({ fetch: async () => new Response(JSON.stringify({ ok: true })) })
+    },
+    AUTH_DEVICES: {
+      idFromName: id => id,
+      get: () => ({ fetch: async (input, init) => {
+        const request = typeof input === "string" ? new Request(input, init) : input;
+        assert.equal(new URL(request.url).pathname, "/register");
+        stored = JSON.parse(init.body).device;
+        return new Response(JSON.stringify({ ok: true, status: "pending" }), { status: 200 });
+      } })
+    }
+  };
+  const response = await worker.fetch(request("/v1/auth/enroll", {
+    installId, nonce, publicKey, signature
+  }), env);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.pending, true);
+  assert.equal(body.enrolled, false);
+  assert.equal(stored.publicKey, publicKey);
+  assert.equal(stored.status, "pending");
+});
