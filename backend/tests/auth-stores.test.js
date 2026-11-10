@@ -497,7 +497,14 @@ test("session endpoint issues a short-lived token once and rejects challenge rep
         }
       })
     },
-    AUTH_DEVICES: makeDeviceNamespace("active")
+    AUTH_DEVICES: {
+      idFromName: id => id,
+      get: () => ({
+        fetch: async () => new Response(JSON.stringify({
+          ok: true, device: { status: "active", publicKey }
+        }), { status: 200, headers: { "content-type": "application/json" } })
+      })
+    }
   };
   const body = { installId, nonce, signature };
   const first = await worker.fetch(request("/v1/auth/session", body), env);
