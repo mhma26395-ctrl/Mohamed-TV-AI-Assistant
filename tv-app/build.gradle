@@ -12,7 +12,7 @@ android {
         buildConfig true
     }
     defaultConfig {
-        applicationId 'com.tvai.assistant'
+        applicationId 'com.tvai.assistant.next'
         minSdk 26
         targetSdk 34
         versionCode 14
