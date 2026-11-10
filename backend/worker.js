@@ -119,6 +119,106 @@ const TOOLS = [{
   { type: "function", function: { name: "get_foreground_app", description: "Estimate the most recent foreground app using Android usage events. Requires Usage Access.", parameters: { type: "object", properties: {}, required: [], additionalProperties: false } } }
 ];
 
+
+const CITY_TIMEZONES = {
+  "cairo": "Africa/Cairo", "القاهرة": "Africa/Cairo", "القاهره": "Africa/Cairo",
+  "london": "Europe/London", "لندن": "Europe/London",
+  "los angeles": "America/Los_Angeles", "لوس انجلوس": "America/Los_Angeles",
+  "new york": "America/New_York", "نيو york": "America/New_York",
+  "paris": "Europe/Paris", "باريس": "Europe/Paris",
+  "riyadh": "Asia/Riyadh", "الرياض": "Asia/Riyadh",
+  "dubai": "Asia/Dubai", "دبي": "Asia/Dubai",
+  "mecca": "Asia/Riyadh", "مكه": "Asia/Riyadh", "مكة": "Asia/Riyadh",
+  "tokyo": "Asia/Tokyo", "طوكيو": "Asia/Tokyo",
+  "istanbul": "Europe/Istanbul", "اسطنبول": "Europe/Istanbul"
+};
+
+function cleanLocation(value) {
+  return String(value || "").trim().replace(/[؟?!.،,]+$/g, "").trim();
+}
+
+function resolveTimezone(location) {
+  const key = cleanLocation(location).toLowerCase();
+  if (CITY_TIMEZONES[key]) return CITY_TIMEZONES[key];
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: key });
+    return key;
+  } catch {
+    return null;
+  }
+}
+
+async function getTimeInfo(location, locale) {
+  const timezone = resolveTimezone(location);
+  if (!timezone) return { ok: false, error: "unknown_city_or_timezone", location };
+  const now = new Date();
+  const formatted = new Intl.DateTimeFormat(locale || "ar-EG", {
+    timeZone: timezone, hour: "numeric", minute: "2-digit", second: "2-digit",
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+    hour12: true, timeZoneName: "long"
+  }).format(now);
+  return { ok: true, type: "time", location, timezone, localDateTime: formatted, timestamp: now.toISOString(), source: "IANA time zone database via Intl" };
+}
+
+function weatherDescription(code, locale) {
+  const ar = {
+    0:"سماء صافية",1:"غالبًا صافٍ",2:"غائم جزئيًا",3:"غائم",45:"ضباب",48:"ضباب متجمد",
+    51:"رذاذ خفيف",53:"رذاذ متوسط",55:"رذاذ كثيف",61:"مطر خفيف",63:"مطر متوسط",65:"مطر غزير",
+    71:"ثلوج خفيفة",73:"ثلوج متوسطة",75:"ثلوج كثيفة",80:"زخات مطر خفيفة",81:"زخات مطر متوسطة",
+    82:"زخات مطر شديدة",95:"عواصف رعدية",96:"عواصف رعدية مع برد",99:"عواصف رعدية شديدة مع برد"
+  };
+  const en = {
+    0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",45:"Fog",48:"Depositing rime fog",
+    51:"Light drizzle",53:"Moderate drizzle",55:"Dense drizzle",61:"Slight rain",63:"Moderate rain",
+    65:"Heavy rain",71:"Slight snow",73:"Moderate snow",75:"Heavy snow",80:"Slight rain showers",
+    81:"Moderate rain showers",82:"Violent rain showers",95:"Thunderstorm",96:"Thunderstorm with hail",
+    99:"Severe thunderstorm with hail"
+  };
+  return (String(locale || "").startsWith("ar") ? ar : en)[code] || (String(locale || "").startsWith("ar") ? "حالة جوية غير محددة" : "Unknown conditions");
+}
+
+async function getWeatherInfo(location, locale) {
+  const city = cleanLocation(location);
+  if (!city) return { ok: false, error: "missing_location" };
+  const geoUrl = "https://geocoding-api.open-meteo.com/v1/search?name=" + encodeURIComponent(city) + "&count=1&language=" + (String(locale || "").startsWith("ar") ? "ar" : "en") + "&format=json";
+  const geoResponse = await fetch(geoUrl, { signal: AbortSignal.timeout(12000) });
+  if (!geoResponse.ok) throw new Error("weather_geocoding_unavailable");
+  const geo = await geoResponse.json();
+  const place = geo.results?.[0];
+  if (!place) return { ok: false, error: "location_not_found", location: city };
+  const params = new URLSearchParams({
+    latitude: String(place.latitude), longitude: String(place.longitude),
+    current: "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m",
+    daily: "weather_code,temperature_2m_max,temperature_2m_min",
+    timezone: "auto", forecast_days: "3"
+  });
+  const wxResponse = await fetch("https://api.open-meteo.com/v1/forecast?" + params.toString(), { signal: AbortSignal.timeout(15000) });
+  if (!wxResponse.ok) throw new Error("weather_provider_unavailable");
+  const wx = await wxResponse.json();
+  const ar = String(locale || "").startsWith("ar");
+  const daily = (wx.daily?.time || []).map((date, i) => ({
+    date, condition: weatherDescription(wx.daily.weather_code?.[i], locale),
+    highC: wx.daily.temperature_2m_max?.[i], lowC: wx.daily.temperature_2m_min?.[i]
+  }));
+  return {
+    ok: true, type: "weather",
+    location: [place.name, place.admin1, place.country].filter(Boolean).join(", "),
+    timezone: wx.timezone,
+    observedAt: wx.current?.time || null,
+    current: {
+      temperatureC: wx.current?.temperature_2m,
+      feelsLikeC: wx.current?.apparent_temperature,
+      humidityPercent: wx.current?.relative_humidity_2m,
+      windSpeedKmh: wx.current?.wind_speed_10m,
+      precipitationMm: wx.current?.precipitation,
+      condition: weatherDescription(wx.current?.weather_code, locale)
+    },
+    forecast: daily,
+    source: "Open-Meteo",
+    sourceUrl: "https://open-meteo.com/"
+  };
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -157,7 +257,7 @@ export default {
     if (request.method === "GET" && url.pathname === "/v1/health") {
       return json({ ok: true, service: "mohamed-tv-ai", apiVersion: 1, provider: "groq" });
     }
-    if (request.method !== "POST" || url.pathname !== "/v1/assistant") {
+    if (request.method !== "POST" || !["/v1/assistant", "/v1/info"].includes(url.pathname)) {
       return json({ error: "not_found" }, 404);
     }
 
@@ -178,6 +278,22 @@ export default {
     let body;
     try { body = await request.json(); } catch { return json({ error: "invalid_json" }, 400); }
     if (!validRequest(body)) return json({ error: "invalid_request", maxMessageLength: 4000 }, 400);
+
+    if (url.pathname === "/v1/info") {
+      let infoBody;
+      try { infoBody = await request.json(); } catch { return json({ error: "invalid_json" }, 400); }
+      if (!infoBody || !["time", "weather"].includes(infoBody.type) || typeof infoBody.location !== "string" || !infoBody.location.trim() || infoBody.location.length > 100) {
+        return json({ error: "invalid_info_request" }, 400);
+      }
+      try {
+        const data = infoBody.type === "time"
+          ? await getTimeInfo(infoBody.location, infoBody.locale)
+          : await getWeatherInfo(infoBody.location, infoBody.locale);
+        return json(data, data.ok ? 200 : 404);
+      } catch (error) {
+        return json({ ok: false, error: "live_info_unavailable", detail: error?.message || "provider_error" }, 502);
+      }
+    }
 
     if (env.RATE_LIMITER) {
       const key = request.headers.get("cf-connecting-ip") || "unknown";
