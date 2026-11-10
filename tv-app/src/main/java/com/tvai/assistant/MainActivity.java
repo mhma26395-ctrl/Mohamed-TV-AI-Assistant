@@ -72,7 +72,9 @@ public class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         buildUi();
         if (getIntent() != null && getIntent().getBooleanExtra("start_voice", false)) new Handler(Looper.getMainLooper()).postDelayed(() -> startListening(), 700);
-        tokenInput.setText(getSharedPreferences("assistant_settings", MODE_PRIVATE).getString("access_token", ""));
+        String savedToken = getSharedPreferences("assistant_settings", MODE_PRIVATE).getString("access_token", "");
+        if (savedToken.isEmpty()) savedToken = getSharedPreferences("MainActivity", MODE_PRIVATE).getString("access_token", "");
+        tokenInput.setText(savedToken);
         tts = new TextToSpeech(this, result -> {
             if (result == TextToSpeech.SUCCESS) { ttsReady = true; tts.setLanguage(new Locale("ar")); }
         });
