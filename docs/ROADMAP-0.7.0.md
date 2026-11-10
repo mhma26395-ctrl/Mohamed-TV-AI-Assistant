@@ -92,6 +92,35 @@ The app should support two optional elevated-control paths while keeping ordinar
 - Do not let the model claim an operation succeeded merely because it proposed a tool call.
 - Provide clear unsupported/permission-required/device-rejected responses.
 
+## General assistant capabilities — not limited to TV controls
+The assistant must behave as a useful general-purpose conversational assistant as well as a TV/device assistant. Do not require the user to enumerate individual question examples. Implement intent routing and reusable information services so new phrasings within a supported category work without adding a one-off phrase handler.
+
+### I. Live information and lookup services
+- **Time and time zones:** answer current local time for named cities/countries (e.g. Cairo, London, Los Angeles), with correct daylight-saving/time-zone rules. Use a reliable time-zone database or provider; do not infer offsets manually.
+- **Weather:** current conditions and forecasts for named cities, with update/observation time and clear distinction between current weather and forecast.
+- **News:** retrieve recent headlines and concise summaries for a named city, Egypt, the Arab world, or the world. Include publication time/source and links when available; distinguish reporting from opinion and avoid presenting old stories as breaking news.
+- **Currencies and exchange rates:** retrieve current rates for named currency pairs (e.g. USD/EGP), include provider timestamp and clarify that bank, cash-market, and official rates may differ. Never invent a current rate.
+- **Gold and commodity prices:** retrieve current gold prices with currency, unit (gram/ounce), karat (24K/21K/18K as applicable), source and timestamp; clearly distinguish spot price from local retail price and note making charges/taxes where relevant. Never invent a current quote.
+- **General web lookup:** answer current factual questions by searching trusted sources when the answer may have changed, summarize evidence, and cite/link sources in the response. If sources conflict or cannot be reached, say so.
+- **Time-sensitive data policy:** never use model training knowledge as a substitute for live data. Every live answer must carry source/time context where available; handle offline, timeout, rate-limit, ambiguous-location, and no-result cases gracefully.
+
+### J. Everyday knowledge, planning, and calculations
+- **Food and meal ideas:** suggest practical meals and recipes based on ingredients, budget, cuisine, preparation time, and dietary preferences when supplied; include ingredients and clear steps. For health-related dietary restrictions, ask only the necessary clarifying question and avoid medical certainty.
+- **Nutrition and healthy eating:** provide general balanced-eating guidance and approximate nutrition only when reasonably supportable; clearly label estimates and avoid prescribing therapeutic diets.
+- **Weight and body measurements:** calculate BMI and explain its limitations. For an ideal/healthy weight estimate, ask for the missing essentials (at minimum height; age and sex where relevant to the chosen method), explain that there is no single exact ideal weight, and avoid making a diagnosis. For children/teens, use age- and sex-specific growth references rather than adult BMI categories.
+- **General calculations and conversions:** support common arithmetic, percentages, dates, units, and practical calculations accurately; use deterministic code/calculation rather than asking the language model to guess.
+- **General conversation and explanation:** handle ordinary educational, practical, and everyday questions without requiring a dedicated device-control tool.
+
+### K. Intent router and service architecture
+- Add a central intent router that classifies requests into: TV/device action, live information lookup, general knowledge/explanation, calculation, and practical planning.
+- Dispatch each class to a suitable capability/service; combine services when needed (e.g. weather plus time, news plus source summaries).
+- Keep external API credentials server-side in Cloudflare Worker secrets; never embed provider keys in the APK or commit them to GitHub.
+- Prefer reliable providers with clear terms, timestamps, and reasonable free tiers; cache only where appropriate and always disclose stale/cached data.
+- Return structured results to the Android app so the UI can present concise answers and follow-up details consistently.
+- Provide Arabic/Egyptian Arabic and English intent coverage, including natural variations rather than brittle exact-phrase matching.
+- Do not expose unsupported features as available. If a service is not configured or its provider is down, explain the actual reason and offer a useful fallback.
+- Create a capability matrix and category-level test suite. Test representative prompts and paraphrases for every category, including named cities, Arabic/English variants, missing details, stale data, provider errors, and offline operation. User should not have to discover each category gap manually.
+
 ## Validation and release gates — all required before APK build
 1. Static review of Android code, manifest permissions, service lifecycle, and backend tool contracts.
 2. Build and lint/test checks without distributing an APK.
