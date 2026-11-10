@@ -103,7 +103,7 @@ public class MainActivity extends Activity {
         addAction(root, "Volume down", "volume down");
         addAction(root, "Help / مساعدة", "help");
 
-        TextView foot = label("Version 0.2.1 · Use the remote arrows to move between highlighted buttons. System changes may require your confirmation.");
+        TextView foot = label("Version 0.2.2 · Use the remote arrows to move between highlighted buttons. System changes may require your confirmation.");
         foot.setTextSize(13);
         root.addView(foot);
         micButton.requestFocus();
@@ -242,8 +242,9 @@ public class MainActivity extends Activity {
         if (has(c, "volume down", "اخفض الصوت", "وطي الصوت", "خفض الصوت", "قلل الصوت")) {
             adjustVolume(AudioManager.ADJUST_LOWER, "Volume decreased / تم خفض الصوت"); return;
         }
-        if (has(c, "مؤقت النوم", "اضبط مؤقت النوم", "وقت النوم", "sleep timer", "turn off tv in", "اطفي التلفزيون بعد")) {
-            reply("مؤقت إطفاء التلفزيون غير متاح من تطبيق عادي على هذا الجهاز. تحقق من إعدادات الطاقة أو مؤقت النوم الأصلي في التلفزيون. / A regular app cannot power off this TV. Check the TV's built-in Power or Sleep Timer settings.");
+        if (has(c, "مؤقت النوم", "اضبط مؤقت النوم", "وقت النوم", "sleep timer", "turn off tv in", "اطفي التلفزيون بعد", "اقفل التلفزيون بعد", "اطفاء التلفزيون بعد")) {
+            launchIntentWithFallback(new Intent("android.settings.SLEEP_SETTINGS"), new Intent(Settings.ACTION_SETTINGS),
+                    "Sleep Timer", "فتحت إعدادات مؤقت النوم إن كانت مدعومة. اختر المدة المطلوبة، مثل 30 دقيقة، ثم أكّد الاختيار. إذا لم تظهر الصفحة، ابحث عن مؤقت النوم ضمن إعدادات الطاقة أو الجهاز. / Opened Sleep Timer settings if supported. Choose the duration, such as 30 minutes, and confirm. If unavailable, look under Power or Device settings.");
             return;
         }
         if (has(c, "خفض الاضاءه", "قلل الاضاءه", "قلل السطوع", "خفض السطوع", "brightness")) {
