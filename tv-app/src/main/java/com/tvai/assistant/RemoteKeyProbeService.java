@@ -39,16 +39,15 @@ public class RemoteKeyProbeService extends AccessibilityService {
             prefs.edit().putBoolean("mapping_enabled", false).putInt("mapped_key_code", -1)
                     .putString("mapped_key_name", "لم يتم اختيار زر").apply();
         }
-        android.accessibilityservice.AccessibilityServiceInfo info = getServiceInfo();
-        if (info != null) {
-            info.flags |= android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS;
-            setServiceInfo(info);
-        }
+        // Safety rollback: do not globally intercept TV remote key events.
+        // Some TV firmware can become unstable when an accessibility service filters keys.
     }
 
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
-        if (event == null) return false;
+        // Global key filtering is intentionally disabled for device stability.
+        return false;
+        /* if (event == null) return false;
         int keyCode = event.getKeyCode();
         // Protected keys pass through unchanged, even while discovering a key.
         if (isProtectedSystemKey(keyCode)) return false;
@@ -101,7 +100,7 @@ public class RemoteKeyProbeService extends AccessibilityService {
         if (event.getAction() == KeyEvent.ACTION_UP
                 && prefs.getBoolean("mapping_enabled", false)
                 && prefs.getInt("mapped_key_code", -1) == keyCode) return true;
-        return false;
+        return false; */
     }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) { }
