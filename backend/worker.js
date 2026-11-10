@@ -327,20 +327,31 @@ const randomToken = (length = 32) => {
 };
 async function verifyDeviceSignature(publicKeySpki, signatureDer, message) {
   try {
-    const key = await crypto.subtle.importKey("spki", unb64u(publicKeySpki), { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+    if (typeof publicKeySpki !== "string" || publicKeySpki.length < 80 || publicKeySpki.length > 1000 ||
+        typeof signatureDer !== "string" || signatureDer.length < 80 || signatureDer.length > 300) return false;
+    const key = await crypto.subtle.importKey(
+      "spki", unb64u(publicKeySpki),
+      { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]
+    );
     const der = unb64u(signatureDer);
-    // Android SHA256withECDSA emits ASN.1 DER; WebCrypto ECDSA expects fixed-width r||s.
-    if (der.length < 8 || der[0] !== 0x30) return false;
+    // P-256 ECDSA signatures are short-form DER sequences containing two INTEGERs.
+    if (der.length < 8 || der[0] !== 0x30 || der[1] !== der.length - 2) return false;
     let offset = 2;
-    if (der[1] & 0x80) offset = 2 + (der[1] & 0x7f);
     if (der[offset++] !== 0x02) return false;
-    const rLen = der[offset++]; let r = der.slice(offset, offset + rLen); offset += rLen;
+    const rLen = der[offset++];
+    if (!rLen || rLen > 33 || offset + rLen + 2 > der.length) return false;
+    let r = der.slice(offset, offset + rLen); offset += rLen;
     if (der[offset++] !== 0x02) return false;
-    const sLen = der[offset++]; let ss = der.slice(offset, offset + sLen);
+    const sLen = der[offset++];
+    if (!sLen || sLen > 33 || offset + sLen !== der.length) return false;
+    let ss = der.slice(offset, offset + sLen);
+    if ((r[0] & 0x80) || (ss[0] & 0x80)) return false;
     while (r.length > 32 && r[0] === 0) r = r.slice(1);
     while (ss.length > 32 && ss[0] === 0) ss = ss.slice(1);
-    if (r.length > 32 || ss.length > 32) return false;
-    const raw = new Uint8Array(64); raw.set(r, 32-r.length); raw.set(ss, 64-ss.length);
+    if (!r.length || !ss.length || r.length > 32 || ss.length > 32) return false;
+    const raw = new Uint8Array(64);
+    raw.set(r, 32 - r.length);
+    raw.set(ss, 64 - ss.length);
     return await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, key, raw, utf8(message));
   } catch { return false; }
 }
