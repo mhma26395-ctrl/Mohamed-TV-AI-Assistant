@@ -43,7 +43,7 @@ Never put any of these values in GitHub, app resources, Gradle files, logs, or t
 2. The app requests a one-time 120-second challenge for a random installation UUID.
 3. For first enrollment, the app signs `enroll|<installId>|<nonce>`; the Worker verifies the signature and stores only the public key and status.
 4. For each new API session, the app requests a fresh challenge and signs `session|<installId>|<nonce>`.
-5. The Worker issues a 10-minute HMAC-SHA256 JWT. Every assistant/info request verifies its signature, expiry, audience, and current device status in KV, then applies per-device and per-IP rate limits.
+5. The Worker issues a 10-minute HMAC-SHA256 JWT. Every assistant/info request verifies its signature, expiry, audience, and current device status through the strongly consistent device Durable Object, then applies per-device and per-IP rate limits.
 6. Challenges are consumed atomically by a Durable Object transaction, deleted after use, and expire automatically after 120 seconds. This avoids the read/delete race that a KV-only challenge store would have.
 
 ## Revocation
@@ -61,4 +61,4 @@ To revoke an installation, invoke the `revoke` operation on the Durable Object i
 
 ## Deployment gate
 
-Do not deploy until the four bindings and both secrets are configured, then test all enrollment/session and API flows against a staging Worker. The current Worker deliberately returns `503` when required bindings are missing. `AUTH_DEVICES` and `AUTH_CHALLENGES` are declared in `backend/wrangler.toml`; ensure the migration `auth-v1` is applied. No production deployment was performed as part of the source changes.
+Do not deploy until all five bindings and both secrets are configured, then test all enrollment/session and API flows against a staging Worker. The current Worker deliberately returns `503` when required bindings are missing. `AUTH_DEVICES` and `AUTH_CHALLENGES` are declared in `backend/wrangler.toml`; ensure the migration `auth-v1` is applied. No production deployment was performed as part of the source changes.
