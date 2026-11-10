@@ -9,13 +9,20 @@ class MemoryStorage {
   async delete(key) { return this.values.delete(key); }
   async setAlarm(value) { this.alarmAt = value; }
   async transaction(callback) {
-    // Serialize transactions to model the Durable Object's single-threaded storage transaction.
-    const result = await callback({
-      get: async key => this.values.get(key),
-      put: async (key, value) => this.values.set(key, structuredClone(value)),
-      delete: async key => this.values.delete(key)
-    });
-    return result;
+    // Queue transactions so concurrent test requests cannot interleave storage operations.
+    const previous = this.transactionTail || Promise.resolve();
+    let release;
+    this.transactionTail = new Promise(resolve => { release = resolve; });
+    await previous;
+    try {
+      return await callback({
+        get: async key => this.values.get(key),
+        put: async (key, value) => this.values.set(key, structuredClone(value)),
+        delete: async key => this.values.delete(key)
+      });
+    } finally {
+      release();
+    }
   }
 }
 const request = (path, body) => new Request("https://unit.test" + path, {
@@ -81,4 +88,30 @@ test("device registration rejects malformed records", async () => {
   const result = await read(await store.fetch(request("/register", { device: { publicKey: "", status: "pending" } })));
   assert.equal(result.status, 409);
   assert.equal(result.body.ok, false);
+});
+
+test("concurrent challenge consumption has exactly one winner", async () => {
+  const storage = new MemoryStorage();
+  const store = new AuthChallengeStore({ storage });
+  const challenge = { installId: "device-1", purpose: "session" };
+  await store.fetch(request("/create", challenge));
+  const results = await Promise.all([
+    store.fetch(request("/consume", challenge)).then(read),
+    store.fetch(request("/consume", challenge)).then(read)
+  ]);
+  assert.equal(results.filter(result => result.body.ok).length, 1);
+  assert.equal(results.filter(result => result.status === 401).length, 1);
+});
+
+test("concurrent device registration cannot replace the first key", async () => {
+  const storage = new MemoryStorage();
+  const store = new AuthDeviceStore({ storage });
+  const results = await Promise.all([
+    store.fetch(request("/register", { device: { publicKey: "key-A", status: "active" } })).then(read),
+    store.fetch(request("/register", { device: { publicKey: "key-B", status: "active" } })).then(read)
+  ]);
+  assert.equal(results.filter(result => result.body.ok).length, 1);
+  assert.equal(results.filter(result => result.status === 409).length, 1);
+  const current = await read(await store.fetch(request("/get", {})));
+  assert.ok(["key-A", "key-B"].includes(current.body.device.publicKey));
 });
