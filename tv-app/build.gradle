@@ -7,8 +7,8 @@ android {
         applicationId 'com.tvai.assistant'
         minSdk 26
         targetSdk 28
-        versionCode 12
-        versionName '0.6.0'
+        versionCode 13
+        versionName '0.6.1'
     }
     signingConfigs {
         debug {
