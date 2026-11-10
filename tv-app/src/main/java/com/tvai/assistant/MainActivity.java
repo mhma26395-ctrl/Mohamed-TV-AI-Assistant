@@ -439,8 +439,18 @@ public class MainActivity extends Activity {
                 JSONObject result = new JSONObject(new String(buffer.toByteArray(), StandardCharsets.UTF_8));
                 String answer;
                 if (code != 200 || !result.optBoolean("ok", false)) {
-                    answer = "تعذر جلب المعلومات المباشرة حاليًا. " +
-                            (result.optString("error", "").equals("location_not_found") ? "لم أتعرف على اسم المدينة." : "تحقق من اتصال الإنترنت وحاول مرة أخرى.");
+                    String error = result.optString("error", "");
+                    if ("location_not_found".equals(error) || "unknown_city_or_timezone".equals(error)) {
+                        answer = "لم أتعرف على اسم المدينة أو المنطقة الزمنية. اذكر مدينة معروفة مثل القاهرة أو لندن.";
+                    } else if ("gold_providers_unavailable".equals(error) || ("gold".equals(type) && code >= 500)) {
+                        answer = "تعذر الوصول إلى مصادر أسعار الذهب الآن. لم أستخدم سعراً قديماً أو تقديرياً غير موثوق. حاول مرة أخرى لاحقاً.";
+                    } else if ("authentication_failed".equals(error)) {
+                        answer = "انتهت جلسة اتصال التلفزيون الآمنة. أعد فتح المساعد وحاول مرة أخرى.";
+                    } else if ("rate_limited".equals(error)) {
+                        answer = "تم تجاوز حد الطلبات المؤقت. انتظر قليلاً ثم أعد المحاولة.";
+                    } else {
+                        answer = "تعذر جلب المعلومات المباشرة حاليًا (رمز " + code + "). تحقق من اتصال التلفزيون بالخادم وحاول مرة أخرى.";
+                    }
                 } else if ("time".equals(type)) {
                     answer = "الوقت الآن في " + queryLocation + ": " + result.optString("localDateTime") +
                             "\nالمنطقة الزمنية: " + result.optString("timezone");
@@ -449,11 +459,12 @@ public class MainActivity extends Activity {
                             "\nتاريخ السعر: " + result.optString("date") + "\nالمصدر: Frankfurter. قد تختلف أسعار البنوك والسوق النقدية.";
                 } else if ("gold".equals(type)) {
                     JSONObject prices = result.optJSONObject("pricePerGram");
-                    answer = "أسعار الذهب التقديرية بالجنيه المصري للجرام (مشتقة من السعر العالمي):" +
+                    answer = "أسعار الذهب الاسترشادية بالجنيه المصري للجرام:" +
                             "\nعيار 24: " + (prices == null ? "—" : prices.optString("24K")) +
                             "\nعيار 21: " + (prices == null ? "—" : prices.optString("21K")) +
                             "\nعيار 18: " + (prices == null ? "—" : prices.optString("18K")) +
                             "\nالمصدر: " + result.optString("source") +
+                            (result.optBoolean("stale", false) ? "\nتنبيه: المصدر يعرض آخر سعر حقيقي مخزّن، وليس سعراً لحظياً." : "") +
                             "\nتنبيه: سعر استرشادي لا يشمل المصنعية أو الضرائب أو هامش محلات الذهب.";
                 } else if ("news".equals(type)) {
                     StringBuilder news = new StringBuilder("أحدث الأخبار خلال آخر 24 ساعة عن ").append(result.optString("query")).append(":");
