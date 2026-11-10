@@ -1,34 +1,39 @@
 # Mohamed TV AI Assistant
 
-Android TV / Google TV voice assistant. The project is maintained from a phone using GitHub and GitHub Actions.
+Arabic/English voice assistant for Android TV and Google TV, with a planned Android phone companion controller.
 
-## Version 0.2.0
-- Keeps the TV-first native Java app and remote-friendly interface.
-- Adds Arabic phonetic normalization for VPN (including "في بي ان") and Downloader.
-- Adds shortcuts for VPN settings, system language settings, Wi-Fi/network settings, developer options, and Downloader.
-- Gives an explicit explanation that Android does not allow an ordinary app to change the system language or silently connect/disconnect a VPN.
-- Keeps YouTube, Google Play, Settings, volume, display settings, screen saver, and help commands.
-- Uses a stable project-specific debug signing key so future debug builds can update this installation without a signature mismatch.
+## Project status
 
-## Build from GitHub Actions
-1. Open **Actions**.
-2. Select **Build Mohamed TV AI Assistant APK**.
-3. Choose **Run workflow** on `main` if a push did not start it automatically.
-4. Open the successful run and download `Mohamed-TV-AI-Assistant-0.2.0-debug`.
-5. Extract the ZIP and install `tv-app-debug.apk` on the TV.
+The repository contains the TV application source and a Cloudflare Worker backend. The phone companion has been selected as the next product direction and its security/transport architecture is documented in [Phone Companion Architecture](docs/PHONE-COMPANION-ARCHITECTURE.md). The phone app is **not implemented or available as an APK yet**.
 
-## Important limitations
-- This is a local-command milestone, not yet a cloud AI assistant. Gemini, DeepSeek, and OpenAI are not connected.
-- The fixed signing key is for this private debug project only. It is not a Play Store/release signing key. Keep the repository private and do not reuse this key for another app.
-- The system language page opens, but the user must select English manually. Android restricts ordinary apps from changing the system locale.
-- VPN settings open, but connecting or disconnecting depends on the installed VPN app and Android's user-consent/security rules.
-- Downloader is opened only if its expected package ID is installed.
-- Speech recognition accuracy and available languages depend on the TV's speech service and installed language packs.
-- Phone companion, QR pairing, secure local transport, and cloud AI backend are future milestones.
+The current TV source is version **0.6.9** (versionCode 21). The existing GitHub Actions workflow produces a temporary **debug APK artifact**, not a permanent signed release. Do not treat it as a production release.
 
-## Next
-1. Test version 0.2.0 on the same TV.
-2. Record which Arabic/English phrases work and which do not.
-3. Improve intent matching based on actual TV tests.
-4. Add secure AI-provider integration through a backend, never by embedding API keys in the APK.
-5. Build the phone companion after the TV app is stable.
+## Main components
+
+- `tv-app/`: Android TV / Google TV app. TV-side permissions and device operations remain on the television.
+- `backend/`: Cloudflare Worker source for assistant and live-information APIs, including per-install device authentication.
+- `docs/`: implementation plans, security requirements, and validation gates.
+
+## Build the current TV debug APK
+
+1. Open the repository's **Actions** tab.
+2. Run **Build Mohamed TV AI Assistant APK** or open the latest successful run.
+3. Download the artifact named for the TV debug build and extract the APK.
+4. Install it on a compatible Android TV / Google TV device.
+
+The artifact is temporary and expires according to the workflow retention setting. A stable, signed release build still requires a securely retained signing identity and completed release checks.
+
+## Security status
+
+- Do not put Groq keys, Worker signing secrets, administrator secrets, shared API tokens, or private signing keys in source code or either APK.
+- The TV app's device identity is designed around Android Keystore. Backend authentication source code is not equivalent to a completed security audit.
+- Cloudflare bindings/secrets, deployment, Android compilation, physical-device integration tests, and security tests must pass before describing cloud authentication as operational.
+- The phone companion must pair locally with explicit user confirmation and use authenticated encrypted transport. It must not receive TV-side Shizuku/ADB privileges.
+
+## Phone companion
+
+The selected phone app is a **remote companion for the TV assistant**. It will provide QR pairing, remote controls, command input, and TV response/status display. The TV remains responsible for executing TV operations. See [the architecture and implementation checklist](docs/PHONE-COMPANION-ARCHITECTURE.md).
+
+## Contributing and release status
+
+The source is under active development. Features marked planned or in-progress are not guaranteed to work. Consult the roadmap and test results before relying on any feature. No independent security certification is claimed.
