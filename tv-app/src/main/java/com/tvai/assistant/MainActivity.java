@@ -2,6 +2,13 @@ package com.tvai.assistant;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.ActivityManager;
+import android.app.AppOpsManager;
+import android.app.usage.UsageStats;
+import android.app.usage.UsageStatsManager;
+import android.content.Context;
+import android.os.Process;
+import android.os.Build;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -433,6 +440,16 @@ public class MainActivity extends Activity {
                     reply("تم تنظيف كاش المساعد فقط. المساحة التي تم تحريرها تقريبًا: " + formatBytes(Math.max(0, before - after)) + ". لا يشمل ذلك كاش التطبيقات الأخرى.");
                 } else if ("get_device_info".equals(name)) {
                     reply("الجهاز: " + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL + " · Android " + android.os.Build.VERSION.RELEASE);
+                } else if ("get_memory_info".equals(name)) {
+                    reply(getMemoryReport());
+                } else if ("check_app_installed".equals(name)) {
+                    reply(checkAppInstalled(args.optString("appName", "")));
+                } else if ("get_last_used_app".equals(name)) {
+                    reply(getLastUsedAppReport());
+                } else if ("launch_last_used_app".equals(name)) {
+                    launchLastUsedApp();
+                } else if ("get_foreground_app".equals(name)) {
+                    reply(getForegroundAppReport());
                 }
             } catch (Exception e) { reply("تعذر تنفيذ الأمر على هذا التلفزيون."); }
         }
@@ -547,6 +564,70 @@ public class MainActivity extends Activity {
         return report.toString();
     }
 
+    private boolean hasUsageAccess() {
+        try {
+            AppOpsManager ops = (AppOpsManager)getSystemService(Context.APP_OPS_SERVICE);
+            return ops.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), getPackageName()) == AppOpsManager.MODE_ALLOWED;
+        } catch (Exception e) { return false; }
+    }
+    private JSONObject findLastUsedApp() {
+        JSONObject out = new JSONObject();
+        if (!hasUsageAccess()) { try { out.put("error", "usage_access_required"); } catch (Exception ignored) {} return out; }
+        try {
+            UsageStatsManager manager = (UsageStatsManager)getSystemService(Context.USAGE_STATS_SERVICE);
+            long end = System.currentTimeMillis(), start = end - 7L * 24L * 60L * 60L * 1000L;
+            java.util.List<UsageStats> list = manager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, start, end);
+            UsageStats latest = null;
+            if (list != null) for (UsageStats item : list) if (item != null && !getPackageName().equals(item.getPackageName()) && (latest == null || item.getLastTimeUsed() > latest.getLastTimeUsed())) latest = item;
+            if (latest == null || latest.getLastTimeUsed() <= 0) { out.put("error", "no_recent_usage"); return out; }
+            String label = latest.getPackageName();
+            try { label = getPackageManager().getApplicationLabel(getPackageManager().getApplicationInfo(latest.getPackageName(), 0)).toString(); } catch (Exception ignored) {}
+            out.put("packageName", latest.getPackageName()); out.put("name", label); out.put("lastTimeUsed", latest.getLastTimeUsed());
+        } catch (Exception e) { try { out.put("error", "usage_query_failed"); } catch (Exception ignored) {} }
+        return out;
+    }
+    private String getLastUsedAppReport() {
+        JSONObject app = findLastUsedApp(); String error = app.optString("error", "");
+        if ("usage_access_required".equals(error)) return "يلزم تفعيل صلاحية Usage Access أولاً من إعدادات أذونات الاستخدام.";
+        if (!error.isEmpty()) return "لم أتمكن من تحديد تطبيق استُخدم خلال آخر 7 أيام.";
+        return "آخر تطبيق مستخدم خلال آخر 7 أيام: " + app.optString("name") + " (" + app.optString("packageName") + ").";
+    }
+    private void launchLastUsedApp() {
+        JSONObject app = findLastUsedApp(); String error = app.optString("error", "");
+        if ("usage_access_required".equals(error)) { launchIntent(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS), "Usage access"); return; }
+        if (!error.isEmpty()) { reply("لم أجد تطبيقًا سابقًا يمكن تشغيله خلال آخر 7 أيام."); return; }
+        String pkg = app.optString("packageName", "");
+        if (!isInstalledPackage(pkg)) { reply("آخر تطبيق مسجل لم يعد مثبتًا على الجهاز."); return; }
+        launchPackage(pkg, app.optString("name", pkg));
+    }
+    private String getForegroundAppReport() {
+        if (!hasUsageAccess()) return "معرفة التطبيق النشط تحتاج صلاحية Usage Access.";
+        try {
+            UsageStatsManager manager = (UsageStatsManager)getSystemService(Context.USAGE_STATS_SERVICE);
+            long end = System.currentTimeMillis();
+            android.app.usage.UsageEvents events = manager.queryEvents(end - 30L * 60L * 1000L, end);
+            android.app.usage.UsageEvents.Event event = new android.app.usage.UsageEvents.Event();
+            String pkg = null; long newest = 0;
+            while (events != null && events.hasNextEvent()) {
+                events.getNextEvent(event); int type = event.getEventType();
+                if ((type == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND || (Build.VERSION.SDK_INT >= 29 && type == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED)) && event.getTimeStamp() >= newest) { newest = event.getTimeStamp(); pkg = event.getPackageName(); }
+            }
+            if (pkg == null) return "لا تتوفر بيانات كافية لتحديد التطبيق النشط الآن.";
+            String label = pkg; try { label = getPackageManager().getApplicationLabel(getPackageManager().getApplicationInfo(pkg, 0)).toString(); } catch (Exception ignored) {}
+            return "آخر تطبيق ظهر في الواجهة خلال آخر 30 دقيقة: " + label + " (" + pkg + "). قد تختلف النتيجة حسب نظام التلفزيون.";
+        } catch (Exception e) { return "تعذر تحديد التطبيق النشط على هذا الجهاز."; }
+    }
+    private String checkAppInstalled(String query) {
+        if (query == null || query.trim().isEmpty()) return "اذكر اسم التطبيق.";
+        String wanted = normalize(query); JSONArray apps = getInstalledLaunchableAppsJson();
+        for (int i=0;i<apps.length();i++) { JSONObject app=apps.optJSONObject(i); if (app==null) continue; String name=normalize(app.optString("name")), pkg=normalize(app.optString("packageName")); if (name.equals(wanted)||pkg.equals(wanted)||name.contains(wanted)||wanted.contains(name)) return "نعم، التطبيق موجود وقابل للتشغيل: " + app.optString("name") + " (" + app.optString("packageName") + ")."; }
+        return "لم أجد تطبيقًا قابلًا للتشغيل بهذا الاسم في قائمة الجهاز؛ قد يكون مثبتًا دون أيقونة تشغيل.";
+    }
+    private String getMemoryReport() {
+        try { ActivityManager manager=(ActivityManager)getSystemService(ACTIVITY_SERVICE); ActivityManager.MemoryInfo info=new ActivityManager.MemoryInfo(); manager.getMemoryInfo(info); long total=info.totalMem, free=info.availMem, used=Math.max(0,total-free);
+            return "حالة RAM (تقدير النظام):\\nالإجمالي: "+formatBytes(total)+"\\nالمستخدم تقريبًا: "+formatBytes(used)+"\\nالمتاح: "+formatBytes(free)+"\\nنسبة الاستخدام: "+(total>0?used*100/total:0)+"%. هذه قراءة للذاكرة وليست تنظيفًا قسريًا.";
+        } catch(Exception e) { return "تعذر قراءة معلومات RAM."; }
+    }
     private long directorySize(File dir) {
         if (dir == null || !dir.exists()) return 0;
         if (dir.isFile()) return dir.length();
