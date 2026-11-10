@@ -60,11 +60,22 @@ public class CompactAssistantActivity extends MainActivity {
         actions.addView(mic, new LinearLayout.LayoutParams(0, -2, 1));
 
         Button close = new Button(this);
-        close.setText("إغلاق");
+        close.setText("إغلاق النافذة");
         close.setAllCaps(false);
         close.setOnClickListener(v -> finish());
         actions.addView(close, new LinearLayout.LayoutParams(0, -2, 1));
         panel.addView(actions);
+
+        Button stopBubble = new Button(this);
+        stopBubble.setText("إيقاف الزر العائم نهائياً");
+        stopBubble.setAllCaps(false);
+        stopBubble.setOnClickListener(v -> {
+            Intent stop = new Intent(this, FloatingBubbleService.class);
+            stop.setAction("com.tvai.assistant.FLOATING_STOP");
+            startService(stop);
+            finish();
+        });
+        panel.addView(stopBubble);
         setContentView(panel);
     }
 
@@ -88,5 +99,16 @@ public class CompactAssistantActivity extends MainActivity {
         p.y = 90;
         getWindow().setAttributes(p);
         getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+    }
+
+    @Override public void onBackPressed() {
+        finish();
+    }
+
+    @Override protected void onDestroy() {
+        super.onDestroy();
+        Intent show = new Intent(this, FloatingBubbleService.class);
+        show.setAction("com.tvai.assistant.FLOATING_SHOW");
+        try { startService(show); } catch (Exception ignored) {}
     }
 }
