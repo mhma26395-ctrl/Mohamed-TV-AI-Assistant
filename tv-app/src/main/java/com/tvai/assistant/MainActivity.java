@@ -178,7 +178,7 @@ public class MainActivity extends Activity {
         root.addView(transcript);
         response = label("اكتب طلبك أو اضغط زر الميكروفون وتحدث بطريقتك الطبيعية. / Type your request or use the microphone.");
         root.addView(response);
-        TextView foot = label("Version 0.6.0 · Remote key mapping requires Accessibility permission. Overlay requires separate permission. No root access is used.");
+        TextView foot = label("Version 0.6.2 · Remote key mapping requires Accessibility permission. Overlay requires separate permission. No root access is used.");
         foot.setTextSize(13);
         root.addView(foot);
         if (micButton != null) micButton.requestFocus();
