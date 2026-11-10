@@ -351,10 +351,16 @@ export async function verifyDeviceSignature(publicKeySpki, signatureDer, message
     const sLen = der[offset++];
     if (!sLen || sLen > 33 || offset + sLen !== der.length) return false;
     let ss = der.slice(offset, offset + sLen);
+    // Require canonical positive DER INTEGER encodings (no negative or redundant leading zero).
     if ((r[0] & 0x80) || (ss[0] & 0x80)) return false;
+    if (r.length > 1 && r[0] === 0 && !(r[1] & 0x80)) return false;
+    if (ss.length > 1 && ss[0] === 0 && !(ss[1] & 0x80)) return false;
+    if (r.length === 33 && r[0] !== 0) return false;
+    if (ss.length === 33 && ss[0] !== 0) return false;
     while (r.length > 32 && r[0] === 0) r = r.slice(1);
     while (ss.length > 32 && ss[0] === 0) ss = ss.slice(1);
-    if (!r.length || !ss.length || r.length > 32 || ss.length > 32) return false;
+    if (!r.length || !ss.length || r.length > 32 || ss.length > 32 ||
+        r.every(byte => byte === 0) || ss.every(byte => byte === 0)) return false;
     const raw = new Uint8Array(64);
     raw.set(r, 32 - r.length);
     raw.set(ss, 64 - ss.length);
