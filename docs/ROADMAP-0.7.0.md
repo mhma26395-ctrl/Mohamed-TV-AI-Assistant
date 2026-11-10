@@ -204,3 +204,16 @@ The manual `APP_ACCESS_TOKEN` entry is a development-only mechanism and must not
 - This authentication work is **not complete** merely because the token field is hidden or removed.
 - Keep the existing development path out of any public release until the replacement protocol is operational end-to-end.
 - Do not build or distribute 0.7.0 until implementation, automated security tests, backend deployment verification, and physical-device validation pass.
+
+
+## Phone companion decision (2026-11-11)
+
+The selected Android phone app is a **companion controller for the TV assistant**, not a standalone phone assistant. The TV remains the authority for executing TV actions; the phone handles pairing, touch/voice input, remote controls, and displaying observed results. The trust boundary and proposed protocol are documented in `docs/PHONE-COMPANION-ARCHITECTURE.md`.
+
+- [x] Record the product decision and trust boundary.
+- [ ] Implement TV-side temporary QR pairing and explicit pairing confirmation.
+- [ ] Implement phone-side QR scanning and Android Keystore device identity.
+- [ ] Implement authenticated encrypted local transport with expiry, replay prevention, rate limits, and revocation.
+- [ ] Implement a typed allowlisted command protocol; never accept arbitrary shell commands from the phone.
+- [ ] Implement the phone UI/module after the protocol contract is stable.
+- [ ] Add physical phone + TV integration tests before publishing a phone APK.
