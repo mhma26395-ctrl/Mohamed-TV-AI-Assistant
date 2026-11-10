@@ -60,8 +60,8 @@ public class FloatingBubbleService extends Service {
     }
 
     private void openAssistant() {
-        Intent i = new Intent(this, MainActivity.class);
-        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        Intent i = new Intent(this, CompactAssistantActivity.class);
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
         i.putExtra("start_voice", true);
         startActivity(i);
     }
