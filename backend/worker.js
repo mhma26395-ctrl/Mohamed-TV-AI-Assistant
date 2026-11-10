@@ -146,8 +146,11 @@ export default {
           ],
           tools: TOOLS,
           tool_choice: "auto",
-          temperature: 0.2,
-          max_completion_tokens: 700,
+          temperature: 0.6,
+          reasoning_effort: "low",
+          include_reasoning: false,
+          parallel_tool_calls: false,
+          max_completion_tokens: 900,
           stream: false
         })
       });
