@@ -360,7 +360,7 @@ async function verifySession(token, secret, env) {
     if (!await crypto.subtle.verify("HMAC", key, unb64u(parts[2]), utf8(parts[0] + "." + parts[1]))) return null;
     const claims = JSON.parse(new TextDecoder().decode(unb64u(parts[1])));
     const now = Math.floor(Date.now()/1000);
-    if (claims.iss !== "mohamed-tv-ai" || claims.aud !== "tv-app" || !claims.sub || !Number.isInteger(claims.exp) || claims.exp <= now || claims.exp > now + 901) return null;
+    if (claims.iss !== "mohamed-tv-ai" || claims.aud !== "tv-app" || !claims.sub || !Number.isInteger(claims.iat) || claims.iat > now + 30 || !Number.isInteger(claims.exp) || claims.exp <= now || claims.exp > now + 601) return null;
     const record = await useDeviceStore(env, claims.sub, "get");
     if (!record || !record.ok || !record.device || record.device.status !== "active") return null;
     return claims;
@@ -405,6 +405,7 @@ async function authRoutes(request, env, url) {
     const id = String(body.installId || "");
     const purpose = String(body.purpose || "");
     if (!/^[0-9a-f-]{36}$/i.test(id) || !["enroll", "session"].includes(purpose)) return json({ error: "invalid_request" }, 400);
+    if (purpose === "enroll" && !await rateLimit(env.ENROLL_LIMITER, "global-enrollment-challenge")) return json({ error: "rate_limited" }, 429);
     if (purpose === "session") {
       const record = await useDeviceStore(env, id, "get");
       if (!record || !record.ok || !record.device || record.device.status !== "active") return json({ error: "authentication_failed" }, 401);
@@ -544,11 +545,6 @@ export default {
     if (url.pathname === "/v1/assistant" && !validRequest(body)) return json({ error: "invalid_request", maxMessageLength: 4000 }, 400);
 
     if (url.pathname === "/v1/info") {
-      if (env.RATE_LIMITER) {
-        const key = request.headers.get("cf-connecting-ip") || "unknown";
-        const decision = await env.RATE_LIMITER.limit({ key });
-        if (!decision.success) return json({ error: "rate_limited" }, 429);
-      }
       const infoBody = body;
       if (!infoBody || !["time", "weather", "currency", "gold", "news"].includes(infoBody.type) || (["time", "weather", "news"].includes(infoBody.type) && (!infoBody.location || typeof infoBody.location !== "string" || !infoBody.location.trim() || infoBody.location.length > 100))) {
         return json({ error: "invalid_info_request" }, 400);
@@ -567,12 +563,6 @@ export default {
       } catch (error) {
         return json({ ok: false, error: "live_info_unavailable", detail: error?.message || "provider_error" }, 502);
       }
-    }
-
-    if (env.RATE_LIMITER) {
-      const key = request.headers.get("cf-connecting-ip") || "unknown";
-      const decision = await env.RATE_LIMITER.limit({ key });
-      if (!decision.success) return json({ error: "rate_limited" }, 429);
     }
 
     const model = env.GROQ_MODEL || "openai/gpt-oss-120b";
