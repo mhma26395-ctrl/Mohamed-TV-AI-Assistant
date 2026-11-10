@@ -271,7 +271,7 @@ test("device revocation endpoint requires admin secret and revokes the selected 
     idFromName: id => id,
     get: () => ({
       fetch: async request => {
-        assert.equal(new URL(request.url).pathname, "/revoke");
+        assert.equal(new URL(typeof request === "string" ? request : request.url).pathname, "/revoke");
         revoked = true;
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }
@@ -324,7 +324,7 @@ test("new devices remain pending until an administrator approves them", async ()
 test("same pending device can retry enrollment but a different key cannot replace it", async () => {
   const storage = new MemoryStorage();
   const store = new AuthDeviceStore({ storage });
-  const device = { publicKey: "public-key-A", status: "pending", createdAt: Date.now(), keyVersion: 1 };
+  const device = { publicKey: "A".repeat(100), status: "pending", createdAt: Date.now(), keyVersion: 1 };
   await store.fetch(request("/register", { device }));
   const retry = await read(await store.fetch(request("/register", { device })));
   const replacement = await read(await store.fetch(request("/register", {
@@ -342,7 +342,7 @@ test("admin approval endpoint requires the admin secret and limiter", async () =
     idFromName: id => id,
     get: () => ({
       fetch: async request => {
-        assert.equal(new URL(request.url).pathname, "/approve");
+        assert.equal(new URL(typeof request === "string" ? request : request.url).pathname, "/approve");
         approved = true;
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }
