@@ -3,7 +3,7 @@ Understand Egyptian Arabic, Modern Standard Arabic, and English, including mixed
 Use only the declared tools for device actions. A tool call is a proposal, not proof that the TV performed the action.
 Never claim an action succeeded unless the device later confirms it.
 If a request is unsupported or needs user approval, explain that clearly. Ask a short clarification when required.
-Never invent installed apps, device capabilities, settings, or action results. The user message may include a JSON list named INSTALLED_APPS_FROM_DEVICE. Use only exact packageName values from that list when calling launch_app or open_app_details. If an app is absent, say it is not in the device-provided launchable app list; do not guess a package.
+Never invent installed apps, device capabilities, settings, or action results. Usage-history tools require the user to grant Usage Access in Android settings. Explain limitations and never claim the foreground app is exact on every TV. The user message may include a JSON list named INSTALLED_APPS_FROM_DEVICE. Use only exact packageName values from that list when calling launch_app or open_app_details. If an app is absent, say it is not in the device-provided launchable app list; do not guess a package.
 Never request passwords, API keys, or other secrets from the user.
 `;
 
@@ -112,7 +112,12 @@ const TOOLS = [{
     description: "Read non-sensitive device details such as Android version, manufacturer, and model.",
     parameters: { type: "object", properties: {}, required: [], additionalProperties: false }
   }
-}];
+}  { type: "function", function: { name: "get_memory_info", description: "Read total, used and available RAM on this TV.", parameters: { type: "object", properties: {}, required: [], additionalProperties: false } } },
+  { type: "function", function: { name: "check_app_installed", description: "Check whether an app name matches an installed launchable app reported by this device.", parameters: { type: "object", properties: { appName: { type: "string" } }, required: ["appName"], additionalProperties: false } } },
+  { type: "function", function: { name: "get_last_used_app", description: "Get the most recently used app from Android Usage Access data.", parameters: { type: "object", properties: {}, required: [], additionalProperties: false } } },
+  { type: "function", function: { name: "launch_last_used_app", description: "Launch the most recently used app if it is still installed. Requires Usage Access.", parameters: { type: "object", properties: {}, required: [], additionalProperties: false } } },
+  { type: "function", function: { name: "get_foreground_app", description: "Estimate the most recent foreground app using Android usage events. Requires Usage Access.", parameters: { type: "object", properties: {}, required: [], additionalProperties: false } } }
+];
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -132,7 +137,7 @@ function validRequest(body) {
 
 function safeToolCalls(message) {
   if (!Array.isArray(message?.tool_calls)) return [];
-  const allowed = new Set(["list_installed_apps", "launch_app", "adjust_volume", "open_settings", "get_device_info", "get_storage_info", "audit_apps", "open_usage_access", "open_app_details", "open_app_management", "clear_own_cache"]);
+  const allowed = new Set(["list_installed_apps", "launch_app", "adjust_volume", "open_settings", "get_device_info", "get_storage_info", "audit_apps", "open_usage_access", "open_app_details", "open_app_management", "clear_own_cache", "get_memory_info", "check_app_installed", "get_last_used_app", "launch_last_used_app", "get_foreground_app"]);
   return message.tool_calls.slice(0, 5).flatMap((call) => {
     const name = call?.function?.name;
     if (!allowed.has(name) || typeof call?.function?.arguments !== "string") return [];
