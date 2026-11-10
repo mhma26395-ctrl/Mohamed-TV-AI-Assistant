@@ -1,0 +1,7 @@
+# Local signing material and generated build output
+*.keystore
+*.jks
+*.keystore.base64
+/local.properties
+.gradle/
+**/build/
