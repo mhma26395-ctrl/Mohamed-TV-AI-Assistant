@@ -138,7 +138,7 @@ The assistant must behave as a useful general-purpose conversational assistant a
 - Usage Access history, recent/foreground usage estimates, app launching, volume, settings shortcuts, storage/RAM reporting, preliminary permission audit, own-cache cleanup, floating overlay, and Accessibility remote-key capture/mapping exist in source.
 - Usage Access does not provide a complete live list of background processes.
 - Accessibility is used for remote-key filtering/mapping; it does not grant general app/process management.
-- Shizuku and direct ADB integration are not yet implemented.
+- Shizuku status detection and explicit authorization UI are present in source; no privileged operation is wired or verified yet. Direct ADB pairing/connection is not implemented.
 - Force-stopping other apps, clearing other apps' cache, and rebooting are not currently verified capabilities.
 - Floating bubble DPAD/OK handling exists in source but requires physical-device validation.
 
@@ -151,7 +151,10 @@ The assistant must behave as a useful general-purpose conversational assistant a
 - [ ] Add general web search beyond the current news feed, and broaden currency-pair parsing.
 - [ ] Add automated endpoint tests for provider timeouts, malformed results, unsupported cities/currencies, and rate limiting.
 - [ ] Test Arabic/English speech variants on physical Android TV hardware.
-- [ ] Continue implementation of Shizuku/ADB, permission center, app management, brightness/VPN, floating assistant, and remaining release items.
+- [x] Add Shizuku API/provider dependency, binder lifecycle listeners, status detection, privilege identity display, and explicit app authorization request UI (source only; compile/device validation pending).
+- [ ] Implement direct ADB-over-Wi-Fi pairing/connection using a reviewed Android-compatible client library.
+- [ ] Implement the shared capability center, Shizuku command execution bridge, operation-specific permission checks, and app/process actions.
+- [ ] Continue brightness/VPN, floating assistant, and remaining release items.
 - **Status caution:** checked source files are committed, but no APK has been built and no live service has been deployed or physically verified. Treat the new functionality as implementation-in-progress until those checks pass.
 
 ## Current decision
