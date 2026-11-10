@@ -357,6 +357,14 @@ public class MainActivity extends Activity {
 
 
     protected void sendToAi(String message) {
+        String normalizedRequest = normalize(message);
+        if (has(normalizedRequest,
+                "التطبيقات اللي شغاله في الخلفيه", "التطبيقات الشغاله في الخلفيه",
+                "تطبيقات الخلفيه", "ايه التطبيقات المفتوحه", "التطبيقات المفتوحه",
+                "background apps", "apps running in background", "which apps are running")) {
+            reply(getRecentAppsReport());
+            return;
+        }
         String token = getSharedPreferences("assistant_settings", MODE_PRIVATE).getString("access_token", getPreferences(MODE_PRIVATE).getString("access_token", "")).trim();
         if (token.isEmpty()) { reply("احفظ Access Token أولاً من خانة الاتصال."); return; }
         setStatus("Preparing request… / تجهيز الطلب…");
@@ -723,6 +731,53 @@ public class MainActivity extends Activity {
             return ops.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), getPackageName()) == AppOpsManager.MODE_ALLOWED;
         } catch (Exception e) { return false; }
     }
+    private String getRecentAppsReport() {
+        if (!hasUsageAccess()) {
+            return "صلاحية Usage Access غير مفعّلة حاليًا. افتح إعدادات Usage Access وفعّلها ثم أعد المحاولة.";
+        }
+        try {
+            UsageStatsManager manager = (UsageStatsManager)getSystemService(Context.USAGE_STATS_SERVICE);
+            long end = System.currentTimeMillis();
+            long start = end - 7L * 24L * 60L * 60L * 1000L;
+            java.util.List<UsageStats> list = manager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, start, end);
+            if (list == null || list.isEmpty()) {
+                return "صلاحية Usage Access مفعّلة، لكن النظام لم يُرجع سجل استخدام خلال آخر 7 أيام.";
+            }
+            Map<String, UsageStats> latestByPackage = new LinkedHashMap<>();
+            for (UsageStats item : list) {
+                if (item == null || item.getLastTimeUsed() <= 0 || getPackageName().equals(item.getPackageName())) continue;
+                UsageStats old = latestByPackage.get(item.getPackageName());
+                if (old == null || item.getLastTimeUsed() > old.getLastTimeUsed()) latestByPackage.put(item.getPackageName(), item);
+            }
+            java.util.List<UsageStats> recent = new ArrayList<>(latestByPackage.values());
+            java.util.Collections.sort(recent, (a, b) -> Long.compare(b.getLastTimeUsed(), a.getLastTimeUsed()));
+            if (recent.isEmpty()) {
+                return "صلاحية Usage Access مفعّلة، لكن لا توجد بيانات استخدام متاحة حتى الآن.";
+            }
+            StringBuilder report = new StringBuilder("صلاحية Usage Access مفعّلة. هذه التطبيقات التي سُجّل استخدامها مؤخرًا خلال آخر 7 أيام، مرتبة من الأحدث:\\n");
+            int count = Math.min(10, recent.size());
+            for (int i = 0; i < count; i++) {
+                UsageStats item = recent.get(i);
+                String label = item.getPackageName();
+                try {
+                    label = getPackageManager().getApplicationLabel(
+                        getPackageManager().getApplicationInfo(item.getPackageName(), 0)).toString();
+                } catch (Exception ignored) {}
+                long age = Math.max(0, end - item.getLastTimeUsed());
+                String when;
+                if (age < 60L * 1000L) when = "منذ أقل من دقيقة";
+                else if (age < 60L * 60L * 1000L) when = "منذ " + (age / (60L * 1000L)) + " دقيقة";
+                else if (age < 24L * 60L * 60L * 1000L) when = "منذ " + (age / (60L * 60L * 1000L)) + " ساعة";
+                else when = "منذ " + (age / (24L * 60L * 60L * 1000L)) + " يوم";
+                report.append(i + 1).append(". ").append(label).append(" — ").append(when).append("\\n");
+            }
+            report.append("\\nمهم: هذه قائمة بسجل الاستخدام الأخير، وليست كشفًا حيًا بكل التطبيقات التي تعمل في الخلفية. أندرويد لا يتيح للتطبيق العادي معرفة كل العمليات النشطة أو إيقافها. لهذه المهام نحتاج تكامل ADB أو Shizuku بعد إعداد منفصل.");
+            return report.toString();
+        } catch (Exception e) {
+            return "صلاحية Usage Access مفعّلة، لكن تعذرت قراءة سجل الاستخدام من هذا التلفزيون.";
+        }
+    }
+
     private JSONObject findLastUsedApp() {
         JSONObject out = new JSONObject();
         if (!hasUsageAccess()) { try { out.put("error", "usage_access_required"); } catch (Exception ignored) {} return out; }
