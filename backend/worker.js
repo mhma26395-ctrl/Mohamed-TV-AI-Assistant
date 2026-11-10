@@ -594,7 +594,7 @@ export default {
     if (request.method === "GET" && url.pathname === "/v1/health") {
       return json({ ok: true, service: "mohamed-tv-ai", apiVersion: 1, provider: "groq" });
     }
-    if (url.pathname.startsWith("/v1/auth/")) return authRoutes(request, env, url);
+    if (url.pathname.startsWith("/v1/auth/") || url.pathname.startsWith("/v1/admin/devices/")) return authRoutes(request, env, url);
     if (request.method !== "POST" || !["/v1/assistant", "/v1/info"].includes(url.pathname)) {
       return json({ error: "not_found" }, 404);
     }
