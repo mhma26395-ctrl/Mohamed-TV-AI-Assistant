@@ -396,6 +396,7 @@ async function authRoutes(request, env, url) {
   if (url.pathname === "/v1/auth/enroll") {
     if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
     if (!await rateLimit(env.ENROLL_LIMITER, "enroll:" + ip)) return json({ error: "rate_limited" }, 429);
+    if (!await rateLimit(env.ENROLL_LIMITER, "global-enrollment")) return json({ error: "rate_limited" }, 429);
     let body; try { body = await request.json(); } catch { return json({ error: "invalid_request" }, 400); }
     const id = String(body.installId || ""), nonce = String(body.nonce || ""), pub = String(body.publicKey || ""), sig = String(body.signature || "");
     if (!/^[0-9a-f-]{36}$/i.test(id) || nonce.length < 30 || pub.length > 1000 || sig.length > 300) return json({ error: "invalid_request" }, 400);
