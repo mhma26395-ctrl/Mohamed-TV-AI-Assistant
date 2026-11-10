@@ -1,5 +1,7 @@
 name: Build Mohamed TV AI Assistant APK
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
