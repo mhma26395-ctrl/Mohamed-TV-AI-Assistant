@@ -58,7 +58,7 @@ To revoke an installation, invoke the `revoke` operation on the Durable Object i
 
 ## Important limitations — do not overstate the protection
 
-- Public first-run enrollment proves possession of a newly generated private key, not that the caller is an authentic copy of this app. A modified client can create its own key pair and attempt enrollment.
+- Administrative approval prevents a new public enrollment from immediately receiving API access, but it does not prove that the caller is an authentic copy of this app. A modified client can create a key and submit a pending enrollment; an administrator must review the request before approval.
 - IP/global rate limits and per-device quotas reduce abuse but do not establish app authenticity. Review Cloudflare Turnstile/attestation options compatible with Android TV before claiming stronger anti-abuse guarantees.
 - A random installation UUID is an identifier, not a credential. Device key cloning is harder when the private key is hardware-backed, but hardware-backed storage is not guaranteed on every TV.
 - Android Keystore implementations vary. The app must report key-generation/authentication failure rather than silently fall back to a plain-text or APK-embedded secret.
