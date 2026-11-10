@@ -346,7 +346,13 @@ export default {
       try {
         const data = infoBody.type === "time"
           ? await getTimeInfo(infoBody.location, infoBody.locale)
-          : await getWeatherInfo(infoBody.location, infoBody.locale);
+          : infoBody.type === "weather"
+            ? await getWeatherInfo(infoBody.location, infoBody.locale)
+            : infoBody.type === "currency"
+              ? await getCurrencyInfo(infoBody.from, infoBody.to)
+              : infoBody.type === "gold"
+                ? await getGoldInfo(infoBody.currency || "EGP")
+                : await getNewsInfo(infoBody.location, infoBody.locale);
         return json(data, data.ok ? 200 : 404);
       } catch (error) {
         return json({ ok: false, error: "live_info_unavailable", detail: error?.message || "provider_error" }, 502);
