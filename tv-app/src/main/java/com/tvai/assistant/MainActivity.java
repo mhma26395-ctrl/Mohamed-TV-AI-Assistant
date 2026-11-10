@@ -659,8 +659,8 @@ public class MainActivity extends Activity {
             String keyName = probe.getString("last_key_name", "UNKNOWN");
             setStatus("آخر زر مرصود: " + keyName + " (KEYCODE " + lastKeyCode + ")");
         }
-        if (probe.getBoolean("capture_armed", false) && probe.getInt("captured_key_code", -1) >= 0) {
-            probe.edit().putBoolean("capture_armed", false).apply();
+        if (probe.getBoolean("capture_notice_pending", false) && probe.getInt("captured_key_code", -1) >= 0) {
+            probe.edit().putBoolean("capture_notice_pending", false).apply();
             reply("تم اكتشاف الزر: " + probe.getString("captured_key_name", "UNKNOWN") + " · KEYCODE " + probe.getInt("captured_key_code", -1) + ". يمكنك الآن تفعيله من تخصيص أزرار الريموت.");
         }
         if (getPreferences(MODE_PRIVATE).getBoolean("pending_usage_check", false)) {
