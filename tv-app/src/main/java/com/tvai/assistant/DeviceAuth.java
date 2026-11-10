@@ -38,7 +38,13 @@ final class DeviceAuth {
         String installId = getOrCreateInstallId(context);
         KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
         ks.load(null);
-        if (!ks.containsAlias(ALIAS)) createKeyPair();
+        if (!ks.containsAlias(ALIAS)) {
+            // Never reuse an enrolled installation ID with a replacement key.
+            installId = UUID.randomUUID().toString();
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                    .putString(ID_KEY, installId).putBoolean("enrolled", false).apply();
+            createKeyPair();
+        }
         PrivateKey privateKey = (PrivateKey) ks.getKey(ALIAS, null);
         java.security.cert.Certificate cert = ks.getCertificate(ALIAS);
         if (privateKey == null || cert == null) throw new SecurityException("device_key_unavailable");
