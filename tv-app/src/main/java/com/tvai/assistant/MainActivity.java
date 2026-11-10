@@ -399,8 +399,6 @@ public class MainActivity extends Activity {
                     showInstalledApps();
                 } else if ("get_device_info".equals(name)) {
                     reply("الجهاز: " + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL + " · Android " + android.os.Build.VERSION.RELEASE);
-                } else if ("list_installed_apps".equals(name)) {
-                    reply("قائمة التطبيقات المثبتة لم تُربط بعد.");
                 }
             } catch (Exception e) { reply("تعذر تنفيذ الأمر على هذا التلفزيون."); }
         }
