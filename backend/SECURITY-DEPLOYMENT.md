@@ -38,7 +38,7 @@ Both classes are exported from `backend/worker.js`. Configure all four rate-limi
 
 - `SESSION_SIGNING_SECRET`: at least 32 cryptographically random bytes, encoded as a long random string. Rotate only with a planned session invalidation.
 - `GROQ_API_KEY`: required for assistant inference only; keep it in Worker secrets.
-- `DEVICE_ADMIN_SECRET`: at least 32 random bytes, stored only as a Worker secret. It protects the administrative device-revocation endpoint. Never put it in the Android app or a public client.
+- `DEVICE_ADMIN_SECRET`: at least 32 random bytes, stored only as a Worker secret. It protects the administrative device-approval and revocation endpoints. Never put it in the Android app or a public client.
 - The legacy `APP_ACCESS_TOKEN` is no longer used by this Worker authentication path. Remove it from Worker secrets after confirming no older private test client depends on it.
 
 Never put any of these values in GitHub, app resources, Gradle files, logs, or the APK.
