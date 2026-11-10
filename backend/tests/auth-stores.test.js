@@ -461,3 +461,54 @@ test("valid first enrollment stores the verified public key as pending", async (
   assert.equal(stored.publicKey, publicKey);
   assert.equal(stored.status, "pending");
 });
+
+
+test("session endpoint issues a short-lived token once and rejects challenge replay", async () => {
+  const pair = await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]
+  );
+  const spki = new Uint8Array(await crypto.subtle.exportKey("spki", pair.publicKey));
+  const publicKey = toBase64Url(spki);
+  const nonce = toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+  const signatureRaw = new Uint8Array(await crypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" }, pair.privateKey,
+    new TextEncoder().encode("session|" + installId + "|" + nonce)
+  ));
+  const signature = toBase64Url(rawSignatureToDer(signatureRaw));
+  const secret = "S".repeat(48);
+  const allow = { limit: async () => ({ success: true }) };
+  let consumed = false;
+  const env = {
+    SESSION_SIGNING_SECRET: secret,
+    ENROLL_LIMITER: allow,
+    RATE_LIMITER: allow,
+    AUTH_CHALLENGES: {
+      idFromName: id => id,
+      get: () => ({
+        fetch: async (input, init) => {
+          const url = new URL(typeof input === "string" ? input : input.url);
+          assert.equal(url.pathname, "/consume");
+          const body = JSON.parse(init.body);
+          assert.equal(body.installId, installId);
+          assert.equal(body.purpose, "session");
+          if (consumed) return new Response(JSON.stringify({ ok: false }), { status: 401 });
+          consumed = true;
+          return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        }
+      })
+    },
+    AUTH_DEVICES: makeDeviceNamespace("active")
+  };
+  const body = { installId, nonce, signature };
+  const first = await worker.fetch(request("/v1/auth/session", body), env);
+  assert.equal(first.status, 200);
+  const session = await first.json();
+  assert.equal(session.ok, true);
+  assert.equal(session.expiresIn, 600);
+  assert.equal(typeof session.token, "string");
+  assert.equal((await verifySession(session.token, secret, env)).sub, installId);
+
+  const replay = await worker.fetch(request("/v1/auth/session", body), env);
+  assert.equal(replay.status, 401);
+  assert.equal((await replay.json()).error, "authentication_failed");
+});
