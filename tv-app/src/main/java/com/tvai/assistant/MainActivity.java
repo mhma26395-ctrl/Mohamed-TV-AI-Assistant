@@ -792,12 +792,18 @@ public class MainActivity extends Activity {
                 reply("لم يتم اكتشاف زر بعد. اختر اكتشاف زر أولاً ثم اضغط الزر المطلوب في الريموت.");
                 return;
             }
+            if (isProtectedRemoteSystemKey(key)) {
+                prefs.edit().putBoolean("mapping_enabled", false).putInt("mapped_key_code", -1)
+                        .putString("mapped_key_name", "لم يتم اختيار زر").apply();
+                reply("هذا زر أساسي في التلفزيون ولا يمكن تخصيصه للمساعد حفاظًا على التحكم الطبيعي. اختر زرًا آخر غير أساسي.");
+                return;
+            }
             String name = prefs.getString("captured_key_name", "KEYCODE_" + key);
             prefs.edit().putInt("mapped_key_code", key)
                     .putString("mapped_key_name", name)
                     .putBoolean("mapping_enabled", true).apply();
             dialog.dismiss();
-            reply("تم تفعيل ربط " + name + " بالمساعد. إذا كان Firmware يمنع اعتراض الزر فقد لا يعمل الربط.");
+            reply("تم تفعيل ربط " + name + " بالمساعد. أزرار التنقل والتأكيد والرجوع والرئيسية والصوت والمساعد الصوتي محمية ولا يمكن اعتراضها.");
         });
         menu.addView(enable);
 
@@ -825,6 +831,29 @@ public class MainActivity extends Activity {
         dialog.getWindow().setLayout(
                 (int)(getResources().getDisplayMetrics().widthPixels * 0.82),
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+    }
+
+    private boolean isProtectedRemoteSystemKey(int keyCode) {
+        return keyCode == KeyEvent.KEYCODE_DPAD_UP
+                || keyCode == KeyEvent.KEYCODE_DPAD_DOWN
+                || keyCode == KeyEvent.KEYCODE_DPAD_LEFT
+                || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+                || keyCode == KeyEvent.KEYCODE_DPAD_CENTER
+                || keyCode == KeyEvent.KEYCODE_ENTER
+                || keyCode == KeyEvent.KEYCODE_HOME
+                || keyCode == KeyEvent.KEYCODE_BACK
+                || keyCode == KeyEvent.KEYCODE_POWER
+                || keyCode == KeyEvent.KEYCODE_MENU
+                || keyCode == KeyEvent.KEYCODE_VOLUME_UP
+                || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
+                || keyCode == KeyEvent.KEYCODE_VOLUME_MUTE
+                || keyCode == KeyEvent.KEYCODE_ASSIST
+                || keyCode == KeyEvent.KEYCODE_VOICE_ASSIST
+                || keyCode == KeyEvent.KEYCODE_SEARCH
+                || keyCode == KeyEvent.KEYCODE_APP_SWITCH
+                || keyCode == KeyEvent.KEYCODE_TV_INPUT
+                || keyCode == KeyEvent.KEYCODE_GUIDE
+                || keyCode == KeyEvent.KEYCODE_SETTINGS;
     }
 
     private boolean isRemoteKeyAccessibilityEnabled() {
