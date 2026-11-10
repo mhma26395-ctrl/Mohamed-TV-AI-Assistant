@@ -27,6 +27,7 @@ public class FloatingBubbleService extends Service {
     private boolean dragged;
     private int bubbleSize;
     private int moveStep;
+    private boolean bubbleAdded;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -121,12 +122,7 @@ public class FloatingBubbleService extends Service {
             return true;
         });
 
-        try {
-            windowManager.addView(bubble, params);
-            bubble.requestFocus();
-        } catch (Exception e) {
-            stopSelf();
-        }
+        showBubble();
     }
 
     private int maxX() {
@@ -168,22 +164,47 @@ public class FloatingBubbleService extends Service {
         }
     }
 
+    private void showBubble() {
+        if (bubble == null || windowManager == null || bubbleAdded) return;
+        try {
+            windowManager.addView(bubble, params);
+            bubbleAdded = true;
+            bubble.requestFocus();
+        } catch (Exception e) {
+            stopSelf();
+        }
+    }
+
+    private void hideBubble() {
+        if (bubble == null || windowManager == null || !bubbleAdded) return;
+        try { windowManager.removeView(bubble); } catch (Exception ignored) {}
+        bubbleAdded = false;
+    }
+
     private void openAssistant() {
+        hideBubble();
         Intent i = new Intent(this, CompactAssistantActivity.class);
-        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         i.putExtra("start_voice", true);
-        startActivity(i);
+        try { startActivity(i); } catch (Exception e) { showBubble(); }
     }
 
     @Override public void onDestroy() {
-        if (bubble != null && windowManager != null) {
-            try { windowManager.removeView(bubble); } catch (Exception ignored) {}
-        }
+        hideBubble();
         bubble = null;
         super.onDestroy();
     }
 
-    @Override public int onStartCommand(Intent intent, int flags, int startId) { return START_NOT_STICKY; }
+    @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        String action = intent == null ? null : intent.getAction();
+        if ("com.tvai.assistant.FLOATING_SHOW".equals(action)) showBubble();
+        else if ("com.tvai.assistant.FLOATING_HIDE".equals(action)) hideBubble();
+        else if ("com.tvai.assistant.FLOATING_STOP".equals(action)) {
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+        return START_NOT_STICKY;
+    }
 
     @Override public IBinder onBind(Intent intent) { return null; }
 }
