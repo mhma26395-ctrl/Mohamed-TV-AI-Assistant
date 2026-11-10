@@ -426,24 +426,24 @@ public class MainActivity extends Activity {
                             (result.optString("error", "").equals("location_not_found") ? "لم أتعرف على اسم المدينة." : "تحقق من اتصال الإنترنت وحاول مرة أخرى.");
                 } else if ("time".equals(type)) {
                     answer = "الوقت الآن في " + city + ": " + result.optString("localDateTime") +
-                            "\\nالمنطقة الزمنية: " + result.optString("timezone");
+                            "\nالمنطقة الزمنية: " + result.optString("timezone");
                 } else {
                     JSONObject current = result.optJSONObject("current");
                     StringBuilder report = new StringBuilder("الطقس الآن في ").append(result.optString("location"))
-                            .append("\\nالحالة: ").append(current == null ? "غير متاحة" : current.optString("condition"))
-                            .append("\\nدرجة الحرارة: ").append(current == null ? "—" : current.optString("temperatureC")).append("°C")
-                            .append("\\nالمحسوسة: ").append(current == null ? "—" : current.optString("feelsLikeC")).append("°C")
-                            .append("\\nالرطوبة: ").append(current == null ? "—" : current.optString("humidityPercent")).append("%")
-                            .append("\\nسرعة الرياح: ").append(current == null ? "—" : current.optString("windSpeedKmh")).append(" كم/س");
+                            .append("\nالحالة: ").append(current == null ? "غير متاحة" : current.optString("condition"))
+                            .append("\nدرجة الحرارة: ").append(current == null ? "—" : current.optString("temperatureC")).append("°C")
+                            .append("\nالمحسوسة: ").append(current == null ? "—" : current.optString("feelsLikeC")).append("°C")
+                            .append("\nالرطوبة: ").append(current == null ? "—" : current.optString("humidityPercent")).append("%")
+                            .append("\nسرعة الرياح: ").append(current == null ? "—" : current.optString("windSpeedKmh")).append(" كم/س");
                     JSONArray forecast = result.optJSONArray("forecast");
                     if (forecast != null) for (int i = 0; i < forecast.length(); i++) {
                         JSONObject day = forecast.optJSONObject(i);
-                        if (day != null) report.append("\\n").append(day.optString("date")).append(": ")
+                        if (day != null) report.append("\n").append(day.optString("date")).append(": ")
                                 .append(day.optString("condition")).append("، العظمى ")
                                 .append(day.optString("highC")).append("° والصغرى ")
                                 .append(day.optString("lowC")).append("°");
                     }
-                    report.append("\\nالمصدر: Open-Meteo · التحديث: ").append(result.optString("observedAt"));
+                    report.append("\nالمصدر: Open-Meteo · التحديث: ").append(result.optString("observedAt"));
                     answer = report.toString();
                 }
                 final String finalAnswer = answer;
