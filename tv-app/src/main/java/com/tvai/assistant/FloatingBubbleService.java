@@ -42,8 +42,8 @@ public class FloatingBubbleService extends Service {
         int type = Build.VERSION.SDK_INT >= 26 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE;
         int bubbleSize = (int)(64 * getResources().getDisplayMetrics().density);\n        params = new WindowManager.LayoutParams(bubbleSize, bubbleSize, type, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.TOP | Gravity.END;
-        params.x = 24;
-        params.y = 180;
+        params.x = (int)(24 * getResources().getDisplayMetrics().density);
+        params.y = (int)(180 * getResources().getDisplayMetrics().density);
         bubble.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
