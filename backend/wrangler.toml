@@ -12,8 +12,7 @@ GROQ_MODEL = "openai/gpt-oss-120b"
 # wrangler secret put GROQ_API_KEY
 # wrangler secret put DEVICE_ADMIN_SECRET
 #
-# Configure ENROLL_LIMITER, RATE_LIMITER, and DEVICE_RATE_LIMITER as
-# Cloudflare Rate Limiting bindings in the Worker dashboard:
+# Configure all four Cloudflare Rate Limiting bindings in the Worker dashboard:
 # ENROLL_LIMITER, RATE_LIMITER, DEVICE_RATE_LIMITER, ADMIN_LIMITER.
 # Do not deploy until all four bindings and all three secrets are configured.
 
