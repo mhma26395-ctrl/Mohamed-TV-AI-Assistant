@@ -352,7 +352,7 @@ async function signSession(payload, secret) {
   const sig = await crypto.subtle.sign("HMAC", key, utf8(input));
   return input + "." + b64u(new Uint8Array(sig));
 }
-async function verifySession(token, secret, registry) {
+async function verifySession(token, secret, env) {
   try {
     const parts = String(token || "").split(".");
     if (parts.length !== 3) return null;
@@ -361,12 +361,12 @@ async function verifySession(token, secret, registry) {
     const claims = JSON.parse(new TextDecoder().decode(unb64u(parts[1])));
     const now = Math.floor(Date.now()/1000);
     if (claims.iss !== "mohamed-tv-ai" || claims.aud !== "tv-app" || !claims.sub || !Number.isInteger(claims.exp) || claims.exp <= now || claims.exp > now + 901) return null;
-    const record = await registry.get("device:" + claims.sub, "json");
+    const record = await useDeviceStore(env, claims.sub, "get");
     if (!record || record.status !== "active") return null;
     return claims;
   } catch { return null; }
 }
-async function rateLimit(binding, key) {
+async function useDeviceStore(env, installId, operation, device) {\n  if (!env.AUTH_DEVICES) throw new Error("auth_device_store_unavailable");\n  const stub = env.AUTH_DEVICES.get(env.AUTH_DEVICES.idFromName(installId));\n  const response = await stub.fetch("https://auth-device/" + operation, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ device }) });\n  return await response.json();\n}\nasync function rateLimit(binding, key) {
   if (!binding) return false;
   const result = await binding.limit({ key });
   return !!result.success;
@@ -383,9 +383,9 @@ async function useChallengeStore(env, nonce, operation, payload) {
   return await response.json();
 }
 async function authRoutes(request, env, url) {
-  const registry = env.DEVICE_REGISTRY;
+
   const secret = env.SESSION_SIGNING_SECRET;
-  if (!registry || !env.AUTH_CHALLENGES || !secret || secret.length < 32 || !env.ENROLL_LIMITER || !env.RATE_LIMITER) {
+  if (!env.AUTH_DEVICES || !env.AUTH_CHALLENGES || !secret || secret.length < 32 || !env.ENROLL_LIMITER || !env.RATE_LIMITER) {
     return json({ error: "auth_service_unavailable" }, 503);
   }
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
@@ -438,6 +438,44 @@ async function authRoutes(request, env, url) {
 }
 
 
+
+export class AuthDeviceStore {
+  constructor(state) { this.state = state; }
+  async fetch(request) {
+    if (request.method !== "POST") return json({ ok: false }, 405);
+    const operation = new URL(request.url).pathname.slice(1);
+    let body; try { body = await request.json(); } catch { return json({ ok: false }, 400); }
+    if (operation === "get") {
+      const device = await this.state.storage.get("device");
+      return json({ ok: !!device, device: device || null });
+    }
+    if (operation === "register") {
+      const result = await this.state.storage.transaction(async txn => {
+        const existing = await txn.get("device");
+        if (existing) return { ok: false };
+        const device = body.device;
+        if (!device || typeof device.publicKey !== "string" || device.publicKey.length > 1000 ||
+            device.status !== "active") return { ok: false };
+        await txn.put("device", device);
+        return { ok: true };
+      });
+      return json(result, result.ok ? 200 : 409);
+    }
+    if (operation === "revoke") {
+      const result = await this.state.storage.transaction(async txn => {
+        const device = await txn.get("device");
+        if (!device) return { ok: false };
+        device.status = "revoked";
+        device.revokedAt = Date.now();
+        await txn.put("device", device);
+        return { ok: true };
+      });
+      return json(result, result.ok ? 200 : 404);
+    }
+    return json({ ok: false }, 404);
+  }
+}
+
 export class AuthChallengeStore {
   constructor(state) { this.state = state; }
   async fetch(request) {
@@ -482,7 +520,7 @@ export default {
     if (request.method !== "POST" || !["/v1/assistant", "/v1/info"].includes(url.pathname)) {
       return json({ error: "not_found" }, 404);
     }
-    if (!env.DEVICE_REGISTRY || !env.AUTH_CHALLENGES || !env.SESSION_SIGNING_SECRET || env.SESSION_SIGNING_SECRET.length < 32 || !env.RATE_LIMITER || !env.DEVICE_RATE_LIMITER) {
+    if (!env.AUTH_DEVICES || !env.AUTH_CHALLENGES || !env.SESSION_SIGNING_SECRET || env.SESSION_SIGNING_SECRET.length < 32 || !env.RATE_LIMITER || !env.DEVICE_RATE_LIMITER) {
       return json({ error: "server_not_configured" }, 503);
     }
     if (url.pathname === "/v1/assistant" && !env.GROQ_API_KEY) {
@@ -490,7 +528,7 @@ export default {
     }
     const auth = request.headers.get("authorization") || "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    const claims = await verifySession(token, env.SESSION_SIGNING_SECRET, env.DEVICE_REGISTRY);
+    const claims = await verifySession(token, env.SESSION_SIGNING_SECRET, env);
     if (!claims) return json({ error: "authentication_failed" }, 401);
     if (!await rateLimit(env.DEVICE_RATE_LIMITER, "device:" + claims.sub)) return json({ error: "rate_limited" }, 429);
     if (!await rateLimit(env.RATE_LIMITER, "ip:" + (request.headers.get("cf-connecting-ip") || "unknown"))) return json({ error: "rate_limited" }, 429);
