@@ -431,7 +431,9 @@ async function authRoutes(request, env, url) {
   const secret = env.SESSION_SIGNING_SECRET;
   if (url.pathname === "/v1/admin/devices/revoke") {
     if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
-    if (!env.DEVICE_ADMIN_SECRET || env.DEVICE_ADMIN_SECRET.length < 32) return json({ error: "admin_service_unavailable" }, 503);
+    if (!env.DEVICE_ADMIN_SECRET || env.DEVICE_ADMIN_SECRET.length < 32 || !env.AUTH_DEVICES || !env.ADMIN_LIMITER) return json({ error: "admin_service_unavailable" }, 503);
+    const ip = request.headers.get("cf-connecting-ip") || "unknown";
+    if (!await rateLimit(env.ADMIN_LIMITER, "device-revoke:" + ip)) return json({ error: "rate_limited" }, 429);
     const supplied = request.headers.get("authorization") || "";
     const candidate = supplied.startsWith("Bearer ") ? supplied.slice(7) : "";
     if (!constantTimeSecretEqual(candidate, env.DEVICE_ADMIN_SECRET)) return json({ error: "not_found" }, 404);
