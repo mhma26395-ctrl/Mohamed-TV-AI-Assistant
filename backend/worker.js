@@ -584,7 +584,7 @@ export class SecurityEventStore {
     let body;
     try { body = await request.json(); } catch { return json({ ok: false }, 400); }
     const allowed = new Set(["auth_rejected", "rate_limited", "enrollment_rejected", "admin_rejected"]);
-    if (!allowed.has(body?.event) || typeof body.day !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(body.day)) return json({ ok: false }, 400);
+    if (!allowed.has(body?.event) || typeof body.day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(body.day)) return json({ ok: false }, 400);
     const key = "daily:" + body.day + ":" + body.event;
     const count = await this.state.storage.transaction(async txn => {
       const next = Math.min(Number(await txn.get(key) || 0) + 1, 1000000000);
