@@ -1,13 +1,6 @@
 name: Build Mohamed TV AI Assistant APK
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
-    paths:
-      - 'tv-app/**'
-      - '*.gradle'
-      - 'gradle.properties'
-      - '.github/workflows/build-tv-apk.yml'
 permissions:
   contents: read
 jobs:
