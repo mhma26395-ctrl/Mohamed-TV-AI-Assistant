@@ -27,7 +27,7 @@ tag = "auth-challenges-v1"
 new_sqlite_classes = ["AuthChallengeStore"]
 ```
 
-The class is exported from `backend/worker.js`. Bind a KV namespace named `DEVICE_REGISTRY` and the three rate-limit bindings listed above as well. Configure the namespace IDs and rate-limit rules in Cloudflare; never commit secret values.
+The class is exported from `backend/worker.js`. The Durable Object bindings are declared in `backend/wrangler.toml`. Configure the three rate-limit bindings listed above in the Cloudflare dashboard as well. Configure the namespace IDs and rate-limit rules in Cloudflare; never commit secret values.
 
 ## Required secrets
 
@@ -48,7 +48,7 @@ Never put any of these values in GitHub, app resources, Gradle files, logs, or t
 
 ## Revocation
 
-To revoke an installation, update its KV value at key `device:<installId>` so `status` is `revoked`. Session validation checks the registry on every API request; KV propagation is not instantaneous, so allow for Cloudflare KV eventual consistency. For emergency global invalidation, rotate `SESSION_SIGNING_SECRET` and expect all clients to obtain new sessions (the device keys remain enrolled).
+To revoke an installation, invoke the `revoke` operation on the Durable Object identified by the installation UUID. Session validation checks the strongly consistent device record on every API request. For emergency global invalidation, rotate `SESSION_SIGNING_SECRET` and expect all clients to obtain new sessions (the device keys remain enrolled).
 
 ## Important limitations — do not overstate the protection
 
@@ -56,9 +56,9 @@ To revoke an installation, update its KV value at key `device:<installId>` so `s
 - IP/global rate limits and per-device quotas reduce abuse but do not establish app authenticity. Review Cloudflare Turnstile/attestation options compatible with Android TV before claiming stronger anti-abuse guarantees.
 - A random installation UUID is an identifier, not a credential. Device key cloning is harder when the private key is hardware-backed, but hardware-backed storage is not guaranteed on every TV.
 - Android Keystore implementations vary. The app must report key-generation/authentication failure rather than silently fall back to a plain-text or APK-embedded secret.
-- The device registry currently uses KV, which is eventually consistent. Revocation may therefore take time to propagate. If immediate revocation is a hard requirement, migrate the device registry/session revocation check to a strongly consistent Durable Object.
+- The device registry and challenge store use Durable Objects with transactional storage. Operational availability and correct production migrations still require staging validation.
 - This protocol is not yet independently penetration-tested. Do not publish or describe it as fully secure until replay, key rotation, revocation, concurrency, rate-limit and physical-device tests pass.
 
 ## Deployment gate
 
-Do not deploy until the four bindings and both secrets are configured, then test all enrollment/session and API flows against a staging Worker. The current Worker deliberately returns `503` when required bindings are missing. No production deployment was performed as part of the source changes.
+Do not deploy until the four bindings and both secrets are configured, then test all enrollment/session and API flows against a staging Worker. The current Worker deliberately returns `503` when required bindings are missing. `AUTH_DEVICES` and `AUTH_CHALLENGES` are declared in `backend/wrangler.toml`; ensure the migration `auth-v1` is applied. No production deployment was performed as part of the source changes.
