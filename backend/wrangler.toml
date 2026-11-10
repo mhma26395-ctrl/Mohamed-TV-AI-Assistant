@@ -13,3 +13,15 @@ GROQ_MODEL = "openai/gpt-oss-120b"
 #
 # Configure a Cloudflare Rate Limiting binding named RATE_LIMITER
 # in the Worker dashboard before exposing the endpoint.
+
+[[durable_objects.bindings]]
+name = "AUTH_CHALLENGES"
+class_name = "AuthChallengeStore"
+
+[[durable_objects.bindings]]
+name = "AUTH_DEVICES"
+class_name = "AuthDeviceStore"
+
+[[migrations]]
+tag = "auth-v1"
+new_sqlite_classes = ["AuthChallengeStore", "AuthDeviceStore"]
