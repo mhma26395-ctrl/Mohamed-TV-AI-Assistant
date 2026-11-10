@@ -8,14 +8,14 @@ Configure these in the Cloudflare Worker environment (Production and Preview sep
 
 | Binding | Type | Purpose |
 |---|---|---|
-| `DEVICE_REGISTRY` | KV namespace | Device public-key records and status |\n| `AUTH_CHALLENGES` | Durable Object namespace bound to exported class `AuthChallengeStore` | Atomic, single-use 120-second challenges |
+| `AUTH_DEVICES` | Durable Object namespace bound to `AuthDeviceStore` | Strongly consistent device records and atomic enrollment/revocation |\n| `AUTH_CHALLENGES` | Durable Object namespace bound to `AuthChallengeStore` | Atomic, single-use 120-second challenges |
 | `ENROLL_LIMITER` | Rate limiting binding | Per-IP and global throttling for enrollment/challenge/session issuance |
 | `RATE_LIMITER` | Rate limiting binding | Per-IP API throttling |
 | `DEVICE_RATE_LIMITER` | Rate limiting binding | Per-installation API throttling |
 
 Set rate-limit thresholds conservatively. Suggested starting policy: enrollment 3 requests per IP per 10 minutes and a global enrollment ceiling; session issuance 20 per IP per 10 minutes; API requests 30 per device per minute and 60 per IP per minute. Adapt after observing real usage and Cloudflare plan limits. The exact limit/window configuration is managed in Cloudflare, not in this source file.
 
-Example Wrangler Durable Object declaration (merge into the existing Worker configuration; do not overwrite existing bindings or migrations):
+The required Wrangler Durable Object declarations and migration are already present in `backend/wrangler.toml`; the equivalent configuration is:
 
 ```toml
 [[durable_objects.bindings]]
@@ -27,7 +27,7 @@ tag = "auth-challenges-v1"
 new_sqlite_classes = ["AuthChallengeStore"]
 ```
 
-The class is exported from `backend/worker.js`. The Durable Object bindings are declared in `backend/wrangler.toml`. Configure the three rate-limit bindings listed above in the Cloudflare dashboard as well. Configure the namespace IDs and rate-limit rules in Cloudflare; never commit secret values.
+Both classes are exported from `backend/worker.js`. Configure the three rate-limit bindings listed above in the Cloudflare dashboard; never commit secret values.
 
 ## Required secrets
 
