@@ -4,7 +4,7 @@ This is the server-side half of the 0.7.0 per-install authentication protocol. I
 
 ## Required Worker bindings
 
-Configure these in the Cloudflare Worker environment (Production and Preview separately):
+Configure these in the Cloudflare Worker environments. The Wrangler file now defines a separate `staging` environment and separate Durable Object namespaces for it:
 
 | Binding | Type | Purpose |
 |---|---|---|
@@ -14,9 +14,9 @@ Configure these in the Cloudflare Worker environment (Production and Preview sep
 | `DEVICE_RATE_LIMITER` | Rate limiting binding | Per-installation API throttling |
 | `ADMIN_LIMITER` | Rate limiting binding | Per-IP throttling for administrative approval and revocation |
 
-Set rate-limit thresholds conservatively. Suggested starting policy: enrollment 3 requests per IP per 10 minutes and a global enrollment ceiling; session issuance 20 per IP per 10 minutes; API requests 30 per device per minute and 60 per IP per minute. Adapt after observing real usage and Cloudflare plan limits. The exact limit/window configuration is managed in Cloudflare, not in this source file.
+Rate limits are declared in `backend/wrangler.toml` for both the default Worker and the isolated `staging` environment. Cloudflare's Worker Rate Limiting binding supports only 10-second or 60-second periods and is approximate per Cloudflare location; it is not a strict worldwide/global ceiling. The starter production limits are 10 enrollment/session requests, 60 requests per IP, 30 requests per device, and 10 admin requests per minute. Staging is intentionally tighter. Namespace IDs must be unique within the Cloudflare account; replace the sample numeric IDs if already used by another Worker. These limits are abuse-friction controls, not a substitute for strict quota enforcement.
 
-The required Wrangler Durable Object declarations and migration are already present in `backend/wrangler.toml`; the equivalent configuration is:
+The default environment's Wrangler Durable Object declarations and migration are already present in `backend/wrangler.toml`; staging has its own repeated bindings and migration tag so its state is isolated. The default environment configuration is:
 
 ```toml
 [[durable_objects.bindings]]
@@ -34,7 +34,7 @@ new_sqlite_classes = ["AuthChallengeStore", "AuthDeviceStore"]
 
 Both classes are exported from `backend/worker.js`. Configure all four rate-limit bindings listed above in the Cloudflare dashboard; never commit secret values.
 
-## Required secrets
+## Staging setup (deploy only after review)\n\nThe staging Worker name is `mohamed-tv-ai-backend-staging`. Wrangler environments do not inherit secrets, vars, or bindings. Add three separate staging secrets directly from a trusted terminal (never paste values into GitHub or chat):\n\n```sh\nwrangler secret put SESSION_SIGNING_SECRET --env staging\nwrangler secret put GROQ_API_KEY --env staging\nwrangler secret put DEVICE_ADMIN_SECRET --env staging\n```\n\nFor the default environment, use the same commands without `--env staging`. Keep staging and production values different. The staging Durable Object migration is tagged `auth-staging-v1`; the default migration remains `auth-v1`. Validate the staging configuration with `npx wrangler deploy --dry-run --env staging --config wrangler.toml` before any real deployment. A dry run does not publish a Worker.\n\n## Required secrets
 
 - `SESSION_SIGNING_SECRET`: at least 32 cryptographically random bytes, encoded as a long random string. Rotate only with a planned session invalidation.
 - `GROQ_API_KEY`: required for assistant inference only; keep it in Worker secrets.
@@ -67,7 +67,7 @@ To revoke an installation, invoke the `revoke` operation on the Durable Object i
 
 ## Deployment gate
 
-Do not deploy until all six bindings and all three secrets are configured, then test all enrollment/session and API flows against a staging Worker. The current Worker deliberately returns `503` when required bindings are missing. `AUTH_DEVICES` and `AUTH_CHALLENGES` are declared in `backend/wrangler.toml`; ensure the migration `auth-v1` is applied. No production deployment was performed as part of the source changes.
+Do not deploy until all six bindings and all three secrets are configured, then test all enrollment/session and API flows against a staging Worker. The current Worker deliberately returns `503` when required bindings are missing. `AUTH_DEVICES` and `AUTH_CHALLENGES` are declared for both environments in `backend/wrangler.toml`; ensure the matching migration is applied. No staging or production deployment was performed as part of the source changes.
 
 
 ## Administrator device actions
