@@ -182,5 +182,7 @@ public class FloatingBubbleService extends Service {
         super.onDestroy();
     }
 
-    @Override public int onStartCommand(Intent intent, int flags, int startId) { return START_NOT_STICKY; }\n\n    @Override public IBinder onBind(Intent intent) { return null; }
+    @Override public int onStartCommand(Intent intent, int flags, int startId) { return START_NOT_STICKY; }
+
+    @Override public IBinder onBind(Intent intent) { return null; }
 }
