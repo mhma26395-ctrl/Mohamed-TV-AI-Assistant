@@ -857,19 +857,23 @@ public class MainActivity extends Activity {
     }
 
     private boolean isRemoteKeyAccessibilityEnabled() {
-        android.view.accessibility.AccessibilityManager manager =
-                (android.view.accessibility.AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
-        if (manager == null) return false;
-        String expectedClass = new android.content.ComponentName(this, RemoteKeyProbeService.class).getClassName();
-        for (android.accessibilityservice.AccessibilityServiceInfo service :
-                manager.getEnabledAccessibilityServiceList(
-                        android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK)) {
-            if (service != null && service.getResolveInfo() != null
-                    && service.getResolveInfo().serviceInfo != null) {
-                android.content.pm.ServiceInfo info = service.getResolveInfo().serviceInfo;
-                if (getPackageName().equals(info.packageName) && expectedClass.equals(info.name)) {
-                    return true;
-                }
+        // Read Android's enabled-service registry directly. Some TV firmware
+        // filters AccessibilityManager's feedback list and hides valid services.
+        android.content.ComponentName expected =
+                new android.content.ComponentName(this, RemoteKeyProbeService.class);
+        String enabled = Settings.Secure.getString(
+                getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        if (enabled == null || enabled.isEmpty()) return false;
+
+        android.text.TextUtils.SimpleStringSplitter splitter =
+                new android.text.TextUtils.SimpleStringSplitter(':');
+        splitter.setString(enabled);
+        String expectedShort = expected.flattenToShortString();
+        String expectedFull = expected.flattenToString();
+        for (String item : splitter) {
+            if (expectedShort.equalsIgnoreCase(item)
+                    || expectedFull.equalsIgnoreCase(item)) {
+                return true;
             }
         }
         return false;
