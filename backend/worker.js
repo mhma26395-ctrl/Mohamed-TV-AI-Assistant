@@ -478,9 +478,11 @@ async function authRoutes(request, env, url) {
     const challenge = await useChallengeStore(env, nonce, "consume", { installId: id, purpose: "enroll" });
     if (!challenge.ok) return json({ error: "authentication_failed" }, 401);
     if (!await verifyDeviceSignature(pub, sig, "enroll|" + id + "|" + nonce)) return json({ error: "authentication_failed" }, 401);
-    const existing = await useDeviceStore(env, id, "register", { publicKey: pub, status: "pending", createdAt: Date.now(), keyVersion: 1 });
+    // First-time installs activate after proving possession of their private key.
+    // A matching pending install is promoted on retry; revoked installs stay revoked.
+    const existing = await useDeviceStore(env, id, "register", { publicKey: pub, status: "active", createdAt: Date.now(), keyVersion: 1 });
     if (!existing.ok) return json({ error: "enrollment_not_available" }, 409);
-    return json({ ok: true, enrolled: existing.status === "active", pending: existing.status === "pending" });
+    return json({ ok: true, enrolled: existing.status === "active", pending: false, status: existing.status });
   }
   if (url.pathname === "/v1/auth/session") {
     if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -518,11 +520,17 @@ export class AuthDeviceStore {
       const result = await this.state.storage.transaction(async txn => {
         const existing = await txn.get("device");
         if (existing) {
-          if (existing.publicKey === body.device?.publicKey) return { ok: true, status: existing.status, alreadyRegistered: true };
-          return { ok: false };
+          if (existing.publicKey !== body.device?.publicKey) return { ok: false };
+          if (existing.status === "pending") {
+            existing.status = "active";
+            existing.activatedAt = Date.now();
+            await txn.put("device", existing);
+          }
+          // Revoked devices never self-reactivate.
+          return { ok: true, status: existing.status, alreadyRegistered: true };
         }
         const device = body.device;
-        if (!device || typeof device.publicKey !== "string" || device.publicKey.length < 80 || device.publicKey.length > 1000 || device.status !== "pending") return { ok: false };
+        if (!device || typeof device.publicKey !== "string" || device.publicKey.length < 80 || device.publicKey.length > 1000 || device.status !== "active") return { ok: false };
         await txn.put("device", device);
         return { ok: true, status: device.status, alreadyRegistered: false };
       });
