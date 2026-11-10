@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import worker, { AuthChallengeStore, AuthDeviceStore, verifyDeviceSignature, signSession, verifySession } from "../worker.js";
+import worker, { AuthChallengeStore, AuthDeviceStore, SecurityEventStore, verifyDeviceSignature, signSession, verifySession } from "../worker.js";
 
 class MemoryStorage {
   constructor() { this.values = new Map(); this.alarmAt = null; }
@@ -8,6 +8,7 @@ class MemoryStorage {
   async put(key, value) { this.values.set(key, structuredClone(value)); }
   async delete(key) { return this.values.delete(key); }
   async setAlarm(value) { this.alarmAt = value; }
+  async list({ prefix = "" } = {}) { return new Map([...this.values].filter(([key]) => String(key).startsWith(prefix))); }
   async transaction(callback) {
     // Queue transactions so concurrent test requests cannot interleave storage operations.
     const previous = this.transactionTail || Promise.resolve();
@@ -560,4 +561,33 @@ test("session endpoint issues a short-lived token once and rejects challenge rep
   const replay = await worker.fetch(request("/v1/auth/session", body), env);
   assert.equal(replay.status, 401);
   assert.equal((await replay.json()).error, "authentication_failed");
+});
+
+
+test("security telemetry stores only approved aggregate event counters", async () => {
+  const storage = new MemoryStorage();
+  const store = new SecurityEventStore({ storage });
+  const event = { event: "rate_limited", day: "2026-11-10" };
+  const first = await read(await store.fetch(request("/increment", event)));
+  const second = await read(await store.fetch(request("/increment", event)));
+  assert.equal(first.body.count, 1);
+  assert.equal(second.body.count, 2);
+  assert.equal(storage.values.size, 1);
+  assert.equal(storage.values.get("daily:2026-11-10:rate_limited"), 2);
+});
+
+test("security telemetry rejects arbitrary event names and malformed dates", async () => {
+  const store = new SecurityEventStore({ storage: new MemoryStorage() });
+  assert.equal((await read(await store.fetch(request("/increment", { event: "store_message", day: "2026-11-10" })))).status, 400);
+  assert.equal((await read(await store.fetch(request("/increment", { event: "rate_limited", day: "not-a-date" })))).status, 400);
+});
+
+test("security telemetry expires aggregate counters older than 30 days", async () => {
+  const storage = new MemoryStorage();
+  await storage.put("daily:2026-01-01:rate_limited", 7);
+  await storage.put("daily:2026-11-10:rate_limited", 2);
+  const store = new SecurityEventStore({ storage });
+  await store.alarm();
+  assert.equal(storage.values.has("daily:2026-01-01:rate_limited"), false);
+  assert.equal(storage.values.has("daily:2026-11-10:rate_limited"), true);
 });
