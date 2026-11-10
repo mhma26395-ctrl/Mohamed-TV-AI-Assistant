@@ -2,6 +2,7 @@ package com.tvai.assistant;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.ActivityManager;
 import android.app.AppOpsManager;
 import android.app.usage.UsageStats;
@@ -125,7 +126,7 @@ public class MainActivity extends Activity {
         saveToken.setOnClickListener(v -> {
             String value = tokenInput.getText().toString().trim();
             if (value.isEmpty()) { reply("أدخل Access Token أولاً."); return; }
-            getPreferences(MODE_PRIVATE).edit().putString("access_token", value).apply();
+            getSharedPreferences("assistant_settings", MODE_PRIVATE).edit().putString("access_token", value).apply();
             reply("تم حفظ مفتاح الاتصال على هذا الجهاز.");
         });
         root.addView(saveToken);
@@ -160,9 +161,18 @@ public class MainActivity extends Activity {
             setStatus("Speech language changed / تم تغيير لغة التعرف على الصوت");
         });
         root.addView(lang);
-        Button disneyTest = button("Test Disney+ remote button / اختبار زر Disney+");
-        disneyTest.setOnClickListener(v -> openDisneyKeyTest());
-        root.addView(disneyTest);
+        Button remoteSettings = button("Remote button customization / تخصيص أزرار الريموت");
+        remoteSettings.setOnClickListener(v -> showRemoteButtonSettings());
+        root.addView(remoteSettings);
+        Button floating = button("Floating assistant / تشغيل الزر العائم");
+        floating.setOnClickListener(v -> enableFloatingAssistant());
+        root.addView(floating);
+        Button stopFloating = button("Hide floating assistant / إخفاء الزر العائم");
+        stopFloating.setOnClickListener(v -> {
+            stopService(new Intent(this, FloatingBubbleService.class));
+            reply("تم إيقاف الزر العائم.");
+        });
+        root.addView(stopFloating);
         Button usage = button("Check Usage Access / فحص إذن التطبيقات");
         usage.setOnClickListener(v -> { if (hasUsageAccess()) reply("إذن Usage Access مفعّل بالفعل."); else openUsageAccessSettings(); });
         root.addView(usage);
@@ -183,7 +193,7 @@ public class MainActivity extends Activity {
         addAction(root, "Volume down", "volume down");
         addAction(root, "Help / مساعدة", "help");
 
-        TextView foot = label("Version 0.2.2 · Use the remote arrows to move between highlighted buttons. System changes may require your confirmation.");
+        TextView foot = label("Version 0.6.0 · Remote key mapping requires Accessibility permission. Overlay requires separate permission. No root access is used.");
         foot.setTextSize(13);
         root.addView(foot);
         micButton.requestFocus();
@@ -346,7 +356,7 @@ public class MainActivity extends Activity {
 
 
     protected void sendToAi(String message) {
-        String token = getPreferences(MODE_PRIVATE).getString("access_token", "").trim();
+        String token = getSharedPreferences("assistant_settings", MODE_PRIVATE).getString("access_token", getPreferences(MODE_PRIVATE).getString("access_token", "")).trim();
         if (token.isEmpty()) { reply("احفظ Access Token أولاً من خانة الاتصال."); return; }
         setStatus("Preparing request… / تجهيز الطلب…");
         network.execute(() -> {
@@ -587,14 +597,45 @@ public class MainActivity extends Activity {
         try { startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)); reply("افتح Mohamed TV AI Assistant وفعّل السماح بالوصول إلى بيانات الاستخدام، ثم ارجع إلى التطبيق."); }
         catch (Exception e) { getPreferences(MODE_PRIVATE).edit().putBoolean("pending_usage_check", false).apply(); reply("تعذر فتح صفحة Usage Access. افتح إعدادات الجهاز ثم التطبيقات ثم Special app access ثم Usage access إن كانت متاحة."); }
     }
-    private void openDisneyKeyTest() {
-        getSharedPreferences("remote_key_probe", MODE_PRIVATE).edit().remove("last_key_code").apply();
-        try {
-            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
-            reply("افتح خدمة Mohamed TV AI Remote Key Test وفعّلها، ثم ارجع للتطبيق واضغط زر Disney+ مرة واحدة. سنسجل كود الزر فقط دون اعتراضه في هذا الاختبار.");
-        } catch (Exception e) {
-            reply("تعذر فتح إعدادات Accessibility. افتح إعدادات الجهاز ثم Accessibility يدويًا.");
-        }
+    private void showRemoteButtonSettings() {
+        android.content.SharedPreferences prefs = getSharedPreferences("remote_key_probe", MODE_PRIVATE);
+        String mappedName = prefs.getString("mapped_key_name", "لم يتم اختيار زر");
+        boolean enabled = prefs.getBoolean("mapping_enabled", false);
+        String state = enabled ? "التخصيص مفعّل" : "التخصيص متوقف";
+        String[] choices = {"اكتشاف زر من الريموت", "تفعيل الزر المختار للمساعد", "إيقاف التخصيص والعودة للسلوك الأصلي", "فتح إعدادات Accessibility", "عرض آخر زر تم اكتشافه"};
+        new AlertDialog.Builder(this).setTitle("تخصيص أزرار الريموت")
+            .setMessage("الزر المختار: " + mappedName + "\\nالحالة: " + state + "\\n\\nملاحظة: بعض الأزرار قد يمنع Firmware الجهاز اعتراضها.")
+            .setItems(choices, (dialog, which) -> {
+                if (which == 0) beginRemoteKeyCapture();
+                else if (which == 1) {
+                    int key = prefs.getInt("captured_key_code", -1);
+                    if (key < 0) reply("اكتشف زرًا أولًا قبل تفعيل التخصيص.");
+                    else {
+                        prefs.edit().putInt("mapped_key_code", key).putString("mapped_key_name", prefs.getString("captured_key_name", "KEYCODE_" + key)).putBoolean("mapping_enabled", true).apply();
+                        reply("تم تفعيل ربط " + prefs.getString("mapped_key_name", "") + " بالمساعد. إذا لم يستقبل النظام الزر فلن يعمل التخصيص.");
+                    }
+                } else if (which == 2) {
+                    prefs.edit().putBoolean("mapping_enabled", false).apply();
+                    reply("تم إيقاف تخصيص الزر. سيُترك الحدث للنظام ليعمل بوظيفته الأصلية.");
+                } else if (which == 3) openRemoteAccessibilitySettings();
+                else {
+                    String name = prefs.getString("last_key_name", "لم يتم رصد زر بعد");
+                    int code = prefs.getInt("last_key_code", -1);
+                    reply("آخر زر مرصود: " + name + " · KEYCODE " + code);
+                }
+            }).show();
+    }
+
+    private void beginRemoteKeyCapture() {
+        getSharedPreferences("remote_key_probe", MODE_PRIVATE).edit()
+            .putBoolean("capture_armed", true).remove("captured_key_code").remove("captured_key_name").apply();
+        reply("وضع اكتشاف الأزرار جاهز. اضغط الزر المطلوب في الريموت مرة واحدة، ثم ارجع للتطبيق لعرض النتيجة. إذا لم يظهر شيء فقد يمنع النظام رصد هذا الزر.");
+        openRemoteAccessibilitySettings();
+    }
+
+    private void openRemoteAccessibilitySettings() {
+        try { startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)); }
+        catch (Exception e) { reply("تعذر فتح إعدادات Accessibility. افتح إعدادات الجهاز ثم Accessibility يدويًا."); }
     }
 
     private void enableFloatingAssistant() {
@@ -616,8 +657,11 @@ public class MainActivity extends Activity {
         int lastKeyCode = probe.getInt("last_key_code", -1);
         if (lastKeyCode >= 0) {
             String keyName = probe.getString("last_key_name", "UNKNOWN");
-            long when = probe.getLong("last_key_time", 0L);
-            setStatus("آخر زر مرصود: " + keyName + " (KEYCODE " + lastKeyCode + "). اضغط Disney+ الآن للاختبار.");
+            setStatus("آخر زر مرصود: " + keyName + " (KEYCODE " + lastKeyCode + ")");
+        }
+        if (probe.getBoolean("capture_armed", false) && probe.getInt("captured_key_code", -1) >= 0) {
+            probe.edit().putBoolean("capture_armed", false).apply();
+            reply("تم اكتشاف الزر: " + probe.getString("captured_key_name", "UNKNOWN") + " · KEYCODE " + probe.getInt("captured_key_code", -1) + ". يمكنك الآن تفعيله من تخصيص أزرار الريموت.");
         }
         if (getPreferences(MODE_PRIVATE).getBoolean("pending_usage_check", false)) {
             getPreferences(MODE_PRIVATE).edit().putBoolean("pending_usage_check", false).apply();
