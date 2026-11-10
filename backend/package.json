@@ -2,6 +2,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "check": "node --check worker.js"
+    "check": "node --check worker.js",
+    "test": "node --test"
   }
 }
