@@ -50,6 +50,7 @@ public class FloatingBubbleService extends Service {
         bubble.setFocusable(true);
         bubble.setFocusableInTouchMode(true);
         bubble.setContentDescription("AI assistant. Use arrow keys to move and OK to open.");
+        bubble.setOnClickListener(v -> openAssistant());
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.OVAL);
         bg.setColor(Color.rgb(0, 180, 215));
@@ -113,7 +114,7 @@ public class FloatingBubbleService extends Service {
                     try { windowManager.updateViewLayout(bubble, params); } catch (Exception ignored) {}
                     return true;
                 case MotionEvent.ACTION_UP:
-                    if (!dragged) openAssistant();
+                    if (!dragged) v.performClick();
                     bubble.requestFocus();
                     return true;
             }
