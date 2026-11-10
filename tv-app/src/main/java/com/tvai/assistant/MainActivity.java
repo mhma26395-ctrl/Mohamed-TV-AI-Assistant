@@ -65,7 +65,6 @@ public class MainActivity extends Activity {
     private boolean ttsReady = false;
     protected String speechLanguage = "ar-EG";
     private Button micButton;
-    protected EditText tokenInput;
     private EditText messageInput;
     private final ExecutorService network = Executors.newSingleThreadExecutor();
     private static final String API_URL = "https://mohamed-tv-ai-backend.mhma26395.workers.dev/v1/assistant";
@@ -91,9 +90,6 @@ public class MainActivity extends Activity {
         buildUi();
         try { Shizuku.addBinderReceivedListener(shizukuBinderReceived); Shizuku.addBinderDeadListener(shizukuBinderDead); Shizuku.addRequestPermissionResultListener(shizukuPermissionResult); } catch (Exception ignored) {}
         if (getIntent() != null && getIntent().getBooleanExtra("start_voice", false)) new Handler(Looper.getMainLooper()).postDelayed(() -> startListening(), 700);
-        String savedToken = getSharedPreferences("assistant_settings", MODE_PRIVATE).getString("access_token", "");
-        if (savedToken.isEmpty()) savedToken = getSharedPreferences("MainActivity", MODE_PRIVATE).getString("access_token", "");
-        tokenInput.setText(savedToken);
         tts = new TextToSpeech(this, result -> {
             if (result == TextToSpeech.SUCCESS) { ttsReady = true; tts.setLanguage(new Locale("ar")); }
         });
@@ -129,31 +125,14 @@ public class MainActivity extends Activity {
         status = label("Ready · جاهز للاستماع");
         root.addView(status);
 
-        tokenInput = new EditText(this);
-        tokenInput.setId(View.generateViewId());
-        tokenInput.setFocusable(true);
-        tokenInput.setFocusableInTouchMode(true);
-        tokenInput.setSingleLine(true);
-        tokenInput.setHint("Access Token (مرة واحدة)");
-        tokenInput.setTextColor(Color.WHITE);
-        tokenInput.setHintTextColor(Color.LTGRAY);
-        tokenInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        root.addView(tokenInput);
-        Button saveToken = button("Save connection token / حفظ مفتاح الاتصال");
-        saveToken.setId(View.generateViewId());
-        saveToken.setOnClickListener(v -> {
-            String value = tokenInput.getText().toString().trim();
-            if (value.isEmpty()) { reply("أدخل Access Token أولاً."); return; }
-            getSharedPreferences("assistant_settings", MODE_PRIVATE).edit().putString("access_token", value).apply();
-            reply("تم حفظ مفتاح الاتصال على هذا الجهاز.");
-        });
-        root.addView(saveToken);
+        TextView secureConnection = label("Secure device connection · اتصال آمن تلقائيًا");
+        secureConnection.setTextColor(Color.LTGRAY);
+        secureConnection.setTextSize(14);
+        root.addView(secureConnection);
         messageInput = new EditText(this);
         messageInput.setId(View.generateViewId());
-        saveToken.setNextFocusDownId(messageInput.getId());
         messageInput.setFocusable(true);
         messageInput.setFocusableInTouchMode(true);
-        messageInput.setNextFocusUpId(saveToken.getId());
         messageInput.setSingleLine(true);
         messageInput.setHint("اكتب أمرًا للتلفزيون / Type a command");
         messageInput.setTextColor(Color.WHITE);
@@ -427,10 +406,6 @@ public class MainActivity extends Activity {
             return true;
         }
 
-        String token = getSharedPreferences("assistant_settings", MODE_PRIVATE)
-                .getString("access_token", getPreferences(MODE_PRIVATE).getString("access_token", "")).trim();
-        if (token.isEmpty()) { reply("احفظ Access Token أولاً من خانة الاتصال."); return true; }
-
         final String type = asksWeather ? "weather" : asksTime ? "time" : asksGold ? "gold" : asksCurrency ? "currency" : "news";
         final String queryLocation = city;
         setStatus("جاري جلب المعلومات من مصدر مباشر…");
@@ -443,7 +418,8 @@ public class MainActivity extends Activity {
                 connection.setReadTimeout(25000);
                 connection.setDoOutput(true);
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-                connection.setRequestProperty("Authorization", "Bearer " + token);
+                String sessionToken = DeviceAuth.getSessionToken(this);
+                connection.setRequestProperty("Authorization", "Bearer " + sessionToken);
                 JSONObject payload = new JSONObject();
                 payload.put("type", type);
                 payload.put("locale", speechLanguage);
@@ -527,8 +503,6 @@ public class MainActivity extends Activity {
             reply(getRecentAppsReport());
             return;
         }
-        String token = getSharedPreferences("assistant_settings", MODE_PRIVATE).getString("access_token", getPreferences(MODE_PRIVATE).getString("access_token", "")).trim();
-        if (token.isEmpty()) { reply("احفظ Access Token أولاً من خانة الاتصال."); return; }
         setStatus("Preparing request… / تجهيز الطلب…");
         network.execute(() -> {
             HttpURLConnection connection = null;
@@ -541,7 +515,8 @@ public class MainActivity extends Activity {
                 connection.setReadTimeout(45000);
                 connection.setDoOutput(true);
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-                connection.setRequestProperty("Authorization", "Bearer " + token);
+                String sessionToken = DeviceAuth.getSessionToken(this);
+                connection.setRequestProperty("Authorization", "Bearer " + sessionToken);
                 JSONObject payload = new JSONObject();
                 JSONArray installedApps = getInstalledLaunchableAppsJson();
                 StringBuilder appContext = new StringBuilder("\\n\\nACTUAL_INSTALLED_APPS_ON_THIS_TV. Use only exact packageName values below for launch_app; never guess package names. If the requested app is not listed, say so.\\n");
