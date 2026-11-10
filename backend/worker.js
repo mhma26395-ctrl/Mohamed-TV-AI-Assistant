@@ -132,7 +132,7 @@ function validRequest(body) {
 
 function safeToolCalls(message) {
   if (!Array.isArray(message?.tool_calls)) return [];
-  const allowed = new Set(["list_installed_apps", "launch_app", "adjust_volume", "open_settings", "get_device_info"]);
+  const allowed = new Set(["list_installed_apps", "launch_app", "adjust_volume", "open_settings", "get_device_info", "get_storage_info", "audit_apps", "open_usage_access", "open_app_details", "open_app_management", "clear_own_cache"]);
   return message.tool_calls.slice(0, 5).flatMap((call) => {
     const name = call?.function?.name;
     if (!allowed.has(name) || typeof call?.function?.arguments !== "string") return [];
