@@ -44,6 +44,8 @@ final class DeviceAuth {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                     .putString(ID_KEY, installId).putBoolean("enrolled", false).apply();
             createKeyPair();
+            // Reload the provider view after creating the alias before reading it.
+            ks.load(null);
         }
         PrivateKey privateKey = (PrivateKey) ks.getKey(ALIAS, null);
         java.security.cert.Certificate cert = ks.getCertificate(ALIAS);
