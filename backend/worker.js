@@ -420,8 +420,27 @@ async function useChallengeStore(env, nonce, operation, payload) {
   });
   return await response.json();
 }
+function constantTimeSecretEqual(candidate, expected) {
+  if (typeof candidate !== "string" || typeof expected !== "string" || !expected || candidate.length !== expected.length) return false;
+  let difference = 0;
+  for (let i = 0; i < expected.length; i++) difference |= candidate.charCodeAt(i) ^ expected.charCodeAt(i);
+  return difference === 0;
+}
+
 async function authRoutes(request, env, url) {
   const secret = env.SESSION_SIGNING_SECRET;
+  if (url.pathname === "/v1/admin/devices/revoke") {
+    if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+    if (!env.DEVICE_ADMIN_SECRET || env.DEVICE_ADMIN_SECRET.length < 32) return json({ error: "admin_service_unavailable" }, 503);
+    const supplied = request.headers.get("authorization") || "";
+    const candidate = supplied.startsWith("Bearer ") ? supplied.slice(7) : "";
+    if (!constantTimeSecretEqual(candidate, env.DEVICE_ADMIN_SECRET)) return json({ error: "not_found" }, 404);
+    let body; try { body = await request.json(); } catch { return json({ error: "invalid_request" }, 400); }
+    if (!isObject(body) || !validInstallId(body.installId)) return json({ error: "invalid_request" }, 400);
+    const result = await useDeviceStore(env, body.installId, "revoke");
+    if (!result || !result.ok) return json({ error: "device_not_found" }, 404);
+    return json({ ok: true, revoked: true });
+  }
   if (!env.AUTH_DEVICES || !env.AUTH_CHALLENGES || !secret || secret.length < 32 || !env.ENROLL_LIMITER || !env.RATE_LIMITER) {
     return json({ error: "auth_service_unavailable" }, 503);
   }
