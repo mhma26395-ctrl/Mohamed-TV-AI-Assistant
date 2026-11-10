@@ -10,10 +10,12 @@ GROQ_MODEL = "openai/gpt-oss-120b"
 # Configure encrypted Worker secrets only; never commit values:
 # wrangler secret put SESSION_SIGNING_SECRET
 # wrangler secret put GROQ_API_KEY
+# wrangler secret put DEVICE_ADMIN_SECRET
 #
 # Configure ENROLL_LIMITER, RATE_LIMITER, and DEVICE_RATE_LIMITER as
-# Cloudflare Rate Limiting bindings in the Worker dashboard. Do not deploy
-# until all three bindings and both secrets are configured.
+# Cloudflare Rate Limiting bindings in the Worker dashboard:
+# ENROLL_LIMITER, RATE_LIMITER, DEVICE_RATE_LIMITER, ADMIN_LIMITER.
+# Do not deploy until all four bindings and all three secrets are configured.
 
 [[durable_objects.bindings]]
 name = "AUTH_CHALLENGES"
