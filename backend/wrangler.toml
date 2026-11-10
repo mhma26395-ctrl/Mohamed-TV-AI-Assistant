@@ -13,6 +13,3 @@ GROQ_MODEL = "openai/gpt-oss-120b"
 #
 # Configure a Cloudflare Rate Limiting binding named RATE_LIMITER
 # in the Worker dashboard before exposing the endpoint.
-
-[secrets]
-required = ["APP_ACCESS_TOKEN", "GROQ_API_KEY"]
