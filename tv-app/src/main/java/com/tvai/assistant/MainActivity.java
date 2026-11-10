@@ -1253,7 +1253,7 @@ public class MainActivity extends Activity {
         if (ttsReady) {
             Locale l = s.matches(".*[\\u0600-\\u06FF].*") ? new Locale("ar") : Locale.US;
             tts.setLanguage(l);
-            tts.speak(s, TextToSpeech.QUEUE_FLUSH, null, "tvai-reply");
+            tts.speak(clean, TextToSpeech.QUEUE_FLUSH, null, "tvai-reply");
         }
     }
 
