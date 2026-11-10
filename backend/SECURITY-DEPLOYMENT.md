@@ -107,3 +107,10 @@ curl -X POST "https://YOUR-WORKER-DOMAIN/v1/admin/devices/revoke" \
 ```
 
 Replace the example domain and UUID before use. Supply the admin secret only through a secure local environment variable. Approval is permitted only from `pending`; a revoked device cannot be re-approved through this endpoint.
+
+
+## Privacy-preserving security telemetry
+
+The Worker now has an optional best-effort `SECURITY_EVENTS` Durable Object binding. It stores only daily aggregate counters for a small allowlist of security event types (currently rate limiting and rejected administrator credentials). It does not store IP addresses, installation IDs, public keys, session tokens, prompts, or assistant responses. Old daily counters are deleted after 30 days. Telemetry failures are deliberately ignored and must never block authentication or assistant requests.
+
+The binding and SQLite Durable Object migration are declared for both the default and isolated staging environments in `wrangler.toml`. This is internal telemetry, not a user-facing dashboard or a push-notification system. It does not yet provide device-level attribution, detailed audit trails, or automatic permanent bans. Existing rate limiters remain the enforcement layer.
