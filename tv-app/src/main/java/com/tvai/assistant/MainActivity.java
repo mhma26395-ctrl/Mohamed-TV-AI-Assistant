@@ -5,6 +5,9 @@ import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -334,6 +337,7 @@ public class MainActivity extends Activity {
                 connection.setRequestProperty("Authorization", "Bearer " + token);
                 JSONObject payload = new JSONObject();
                 payload.put("message", message);
+                payload.put("installedApps", getInstalledLaunchableAppsJson());
                 try (OutputStream out = connection.getOutputStream()) {
                     out.write(payload.toString().getBytes(StandardCharsets.UTF_8));
                 }
@@ -391,6 +395,8 @@ public class MainActivity extends Activity {
                     else if ("developer".equals(page)) intent = new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
                     else intent = new Intent(Settings.ACTION_SETTINGS);
                     launchIntent(intent, "Settings");
+                } else if ("list_installed_apps".equals(name)) {
+                    showInstalledApps();
                 } else if ("get_device_info".equals(name)) {
                     reply("الجهاز: " + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL + " · Android " + android.os.Build.VERSION.RELEASE);
                 } else if ("list_installed_apps".equals(name)) {
@@ -398,6 +404,56 @@ public class MainActivity extends Activity {
                 }
             } catch (Exception e) { reply("تعذر تنفيذ الأمر على هذا التلفزيون."); }
         }
+    }
+
+
+    private JSONArray getInstalledLaunchableAppsJson() {
+        JSONArray apps = new JSONArray();
+        Map<String, String> found = new LinkedHashMap<>();
+        PackageManager pm = getPackageManager();
+        Intent leanback = new Intent(Intent.ACTION_MAIN);
+        leanback.addCategory("android.intent.category.LEANBACK_LAUNCHER");
+        for (ResolveInfo info : pm.queryIntentActivities(leanback, 0)) {
+            if (info.activityInfo == null) continue;
+            String pkg = info.activityInfo.packageName;
+            CharSequence label = info.loadLabel(pm);
+            if (pkg != null && label != null) found.put(pkg, label.toString());
+        }
+        Intent launcher = new Intent(Intent.ACTION_MAIN);
+        launcher.addCategory(Intent.CATEGORY_LAUNCHER);
+        for (ResolveInfo info : pm.queryIntentActivities(launcher, 0)) {
+            if (info.activityInfo == null) continue;
+            String pkg = info.activityInfo.packageName;
+            CharSequence label = info.loadLabel(pm);
+            if (pkg != null && label != null && !found.containsKey(pkg)) found.put(pkg, label.toString());
+        }
+        for (Map.Entry<String, String> entry : found.entrySet()) {
+            JSONObject item = new JSONObject();
+            try {
+                item.put("name", entry.getValue());
+                item.put("packageName", entry.getKey());
+                apps.put(item);
+            } catch (Exception ignored) {}
+        }
+        return apps;
+    }
+
+    private void showInstalledApps() {
+        JSONArray apps = getInstalledLaunchableAppsJson();
+        if (apps.length() == 0) {
+            reply("لم أجد تطبيقات قابلة للتشغيل في قائمة التلفزيون.");
+            return;
+        }
+        StringBuilder list = new StringBuilder("التطبيقات المتاحة على هذا التلفزيون (")
+                .append(apps.length()).append("):\\n");
+        int limit = Math.min(apps.length(), 45);
+        for (int i = 0; i < limit; i++) {
+            JSONObject app = apps.optJSONObject(i);
+            if (app != null) list.append("• ").append(app.optString("name"))
+                    .append("  [").append(app.optString("packageName")).append("]\\n");
+        }
+        if (apps.length() > limit) list.append("وباقي التطبيقات: ").append(apps.length() - limit);
+        reply(list.toString());
     }
 
     private void adjustVolume(int direction, String message) {
