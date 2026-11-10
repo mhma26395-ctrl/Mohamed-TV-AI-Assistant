@@ -5,6 +5,7 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.GradientDrawable;
@@ -29,7 +30,13 @@ public class FloatingBubbleService extends Service {
 
     @Override public void onCreate() {
         super.onCreate();
-        startAssistantForeground();
+        try {
+            startAssistantForeground();
+        } catch (RuntimeException e) {
+            // Fail closed if Android refuses the foreground-service start.
+            stopSelf();
+            return;
+        }
         windowManager = (WindowManager)getSystemService(WINDOW_SERVICE);
         bubbleSize = (int)(64 * getResources().getDisplayMetrics().density);
         moveStep = (int)(36 * getResources().getDisplayMetrics().density);
@@ -153,7 +160,11 @@ public class FloatingBubbleService extends Service {
         Notification notification = Build.VERSION.SDK_INT >= 26
             ? new Notification.Builder(this, channelId).setSmallIcon(android.R.drawable.ic_btn_speak_now).setContentTitle("Mohamed TV AI Assistant").setContentText("استخدم الأسهم لتحريك زر AI وOK لفتحه").setOngoing(true).build()
             : new Notification.Builder(this).setSmallIcon(android.R.drawable.ic_btn_speak_now).setContentTitle("Mohamed TV AI Assistant").setOngoing(true).build();
-        startForeground(4102, notification);
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(4102, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+        } else {
+            startForeground(4102, notification);
+        }
     }
 
     private void openAssistant() {
@@ -171,5 +182,5 @@ public class FloatingBubbleService extends Service {
         super.onDestroy();
     }
 
-    @Override public IBinder onBind(Intent intent) { return null; }
+    @Override public int onStartCommand(Intent intent, int flags, int startId) { return START_NOT_STICKY; }\n\n    @Override public IBinder onBind(Intent intent) { return null; }
 }
