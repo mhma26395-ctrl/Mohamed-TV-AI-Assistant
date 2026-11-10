@@ -331,7 +331,7 @@ const randomToken = (length = 32) => {
   const bytes = crypto.getRandomValues(new Uint8Array(length));
   return b64u(bytes);
 };
-async function verifyDeviceSignature(publicKeySpki, signatureDer, message) {
+export async function verifyDeviceSignature(publicKeySpki, signatureDer, message) {
   try {
     if (typeof publicKeySpki !== "string" || publicKeySpki.length < 80 || publicKeySpki.length > 1000 ||
         typeof signatureDer !== "string" || signatureDer.length < 80 || signatureDer.length > 300) return false;
@@ -361,7 +361,7 @@ async function verifyDeviceSignature(publicKeySpki, signatureDer, message) {
     return await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, key, raw, utf8(message));
   } catch { return false; }
 }
-async function signSession(payload, secret) {
+export async function signSession(payload, secret) {
   const key = await crypto.subtle.importKey("raw", utf8(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const head = b64u(utf8(JSON.stringify({ alg: "HS256", typ: "JWT" })));
   const body = b64u(utf8(JSON.stringify(payload)));
@@ -369,7 +369,7 @@ async function signSession(payload, secret) {
   const sig = await crypto.subtle.sign("HMAC", key, utf8(input));
   return input + "." + b64u(new Uint8Array(sig));
 }
-async function verifySession(token, secret, env) {
+export async function verifySession(token, secret, env) {
   try {
     const parts = String(token || "").split(".");
     if (parts.length !== 3) return null;
