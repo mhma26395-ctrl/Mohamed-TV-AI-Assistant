@@ -184,18 +184,11 @@ public class MainActivity extends Activity {
         Button remoteSettings = button("Remote button customization / تخصيص أزرار الريموت");
         remoteSettings.setOnClickListener(v -> showRemoteButtonSettings());
         root.addView(remoteSettings);
-        Button shizukuStatus = button("Shizuku / ADB capability status");
-        shizukuStatus.setOnClickListener(v -> showShizukuStatus());
-        root.addView(shizukuStatus);
-        Button shizukuGrant = button("Connect / authorize Shizuku");
-        shizukuGrant.setOnClickListener(v -> requestShizukuAuthorization());
-        root.addView(shizukuGrant);
-
         Button usage = button("Check Usage Access / فحص إذن التطبيقات");
         usage.setOnClickListener(v -> { if (hasUsageAccess()) reply("إذن Usage Access مفعّل بالفعل."); else openUsageAccessSettings(); });
         root.addView(usage);
 
-        TextView foot = label("Version 0.6.3 · Voice replies can be toggled. Remote key mapping needs supported Accessibility key filtering.");
+        TextView foot = label("Version 0.6.4 · Voice replies are optional. Remote key mapping uses Accessibility key filtering when supported by the TV.");
         foot.setTextSize(13);
         root.addView(foot);
         if (micButton != null) micButton.requestFocus();
@@ -1005,12 +998,19 @@ public class MainActivity extends Activity {
     private boolean hasUsageAccess() {
         try {
             AppOpsManager ops = (AppOpsManager)getSystemService(Context.APP_OPS_SERVICE);
-            return ops.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), getPackageName()) == AppOpsManager.MODE_ALLOWED;
+            int uid = getPackageManager().getApplicationInfo(getPackageName(), 0).uid;
+            int mode = ops.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, uid, getPackageName());
+            if (mode == AppOpsManager.MODE_ALLOWED) return true;
+            if (Build.VERSION.SDK_INT >= 29) {
+                return ops.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, uid, getPackageName())
+                        == AppOpsManager.MODE_ALLOWED;
+            }
+            return false;
         } catch (Exception e) { return false; }
     }
     private String getRecentAppsReport() {
         if (!hasUsageAccess()) {
-            return "صلاحية Usage Access غير مفعّلة حاليًا. افتح إعدادات Usage Access وفعّلها ثم أعد المحاولة.";
+            return "تعذر على النظام تأكيد Usage Access لهذا التطبيق. افتح صفحة الإذن، وتأكد أن المفتاح الخاص بـ Mohamed TV AI Assistant مفعّل، ثم ارجع وأعد المحاولة.";
         }
         try {
             UsageStatsManager manager = (UsageStatsManager)getSystemService(Context.USAGE_STATS_SERVICE);
@@ -1057,7 +1057,7 @@ public class MainActivity extends Activity {
 
     private JSONObject findLastUsedApp() {
         JSONObject out = new JSONObject();
-        if (!hasUsageAccess()) { try { out.put("error", "usage_access_required"); } catch (Exception ignored) {} return out; }
+        if (!hasUsageAccess()) { try { out.put("error", "usage_access_unconfirmed"); } catch (Exception ignored) {} return out; }
         try {
             UsageStatsManager manager = (UsageStatsManager)getSystemService(Context.USAGE_STATS_SERVICE);
             long end = System.currentTimeMillis(), start = end - 7L * 24L * 60L * 60L * 1000L;
@@ -1073,13 +1073,13 @@ public class MainActivity extends Activity {
     }
     private String getLastUsedAppReport() {
         JSONObject app = findLastUsedApp(); String error = app.optString("error", "");
-        if ("usage_access_required".equals(error)) return "يلزم تفعيل صلاحية Usage Access أولاً من إعدادات أذونات الاستخدام.";
+        if ("usage_access_unconfirmed".equals(error)) return "تعذر تأكيد صلاحية Usage Access من النظام. راجع الإذن الخاص بهذا التطبيق ثم أعد المحاولة.";
         if (!error.isEmpty()) return "لم أتمكن من تحديد تطبيق استُخدم خلال آخر 7 أيام.";
         return "آخر تطبيق مستخدم خلال آخر 7 أيام: " + app.optString("name") + " (" + app.optString("packageName") + ").";
     }
     private void launchLastUsedApp() {
         JSONObject app = findLastUsedApp(); String error = app.optString("error", "");
-        if ("usage_access_required".equals(error)) { launchIntent(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS), "Usage access"); return; }
+        if ("usage_access_unconfirmed".equals(error)) { launchIntent(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS), "Usage access"); return; }
         if (!error.isEmpty()) { reply("لم أجد تطبيقًا سابقًا يمكن تشغيله خلال آخر 7 أيام."); return; }
         String pkg = app.optString("packageName", "");
         if (!isInstalledPackage(pkg)) { reply("آخر تطبيق مسجل لم يعد مثبتًا على الجهاز."); return; }
