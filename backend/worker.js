@@ -439,6 +439,9 @@ export default {
     if (!env.DEVICE_REGISTRY || !env.SESSION_SIGNING_SECRET || env.SESSION_SIGNING_SECRET.length < 32 || !env.RATE_LIMITER || !env.DEVICE_RATE_LIMITER) {
       return json({ error: "server_not_configured" }, 503);
     }
+    if (url.pathname === "/v1/assistant" && !env.GROQ_API_KEY) {
+      return json({ error: "server_not_configured" }, 503);
+    }
     const auth = request.headers.get("authorization") || "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
     const claims = await verifySession(token, env.SESSION_SIGNING_SECRET, env.DEVICE_REGISTRY);
