@@ -211,8 +211,9 @@ export default {
           stream: false
         })
       });
-    } catch {
-      return json({ error: "provider_unavailable" }, 502);
+    } catch (error) {
+      const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+      return json({ error: timedOut ? "provider_timeout" : "provider_unavailable" }, timedOut ? 504 : 502);
     }
 
     const raw = await upstream.json().catch(() => ({}));
