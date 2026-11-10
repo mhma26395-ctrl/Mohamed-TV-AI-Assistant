@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="remote_key_probe_description">اختبار زر Disney+ في الريموت: يرصد رموز أزرار الريموت ولا يقرأ محتوى الشاشة.</string>
+    <string name="remote_key_probe_description">تخصيص أزرار الريموت: يكتشف رموز الأزرار التي يسمح النظام برصدها، ولا يقرأ محتوى الشاشة. عند التفعيل يعترض الزر الذي اختاره المستخدم فقط.</string>
 </resources>
