@@ -335,6 +335,16 @@ public class MainActivity extends Activity {
         if (has(c, "volume down", "اخفض الصوت", "وطي الصوت", "خفض الصوت", "قلل الصوت")) {
             adjustVolume(AudioManager.ADJUST_LOWER, "Volume decreased / تم خفض الصوت"); return;
         }
+        if (has(c, "mute", "اكتم الصوت", "كتم الصوت", "اسكت الصوت")) {
+            AudioManager audio = (AudioManager)getSystemService(AUDIO_SERVICE);
+            if (audio != null) audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, AudioManager.FLAG_SHOW_UI);
+            reply("تم إرسال أمر كتم الصوت."); return;
+        }
+        if (has(c, "unmute", "الغاء كتم الصوت", "الغاء الصامت", "شغل الصوت", "افتح الصوت")) {
+            AudioManager audio = (AudioManager)getSystemService(AUDIO_SERVICE);
+            if (audio != null) audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, AudioManager.FLAG_SHOW_UI);
+            reply("تم إرسال أمر إلغاء كتم الصوت."); return;
+        }
         if (has(c, "مؤقت النوم", "اضبط مؤقت النوم", "وقت النوم", "sleep timer", "turn off tv in", "اطفي التلفزيون بعد", "اقفل التلفزيون بعد", "اطفاء التلفزيون بعد")) {
             launchIntentWithFallback(new Intent("android.settings.SLEEP_SETTINGS"), new Intent(Settings.ACTION_SETTINGS),
                     "Sleep Timer", "فتحت إعدادات مؤقت النوم إن كانت مدعومة. اختر المدة المطلوبة، مثل 30 دقيقة، ثم أكّد الاختيار. إذا لم تظهر الصفحة، ابحث عن مؤقت النوم ضمن إعدادات الطاقة أو الجهاز. / Opened Sleep Timer settings if supported. Choose the duration, such as 30 minutes, and confirm. If unavailable, look under Power or Device settings.");
@@ -566,7 +576,6 @@ public class MainActivity extends Activity {
 
     protected void sendToAi(String message) {
         String normalizedRequest = normalize(message);
-        if (tryHandleLocalAudioCommand(normalizedRequest)) return;
         if (tryHandleSleepTimerRequest(message, normalizedRequest)) return;
         if (tryHandleLiveInfo(message, normalizedRequest)) return;
         if (tryHandleYouTubeSearch(message, normalizedRequest)) return;
