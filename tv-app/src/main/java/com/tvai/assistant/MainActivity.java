@@ -510,8 +510,31 @@ public class MainActivity extends Activity {
         return true;
     }
 
+
+    private boolean tryHandleSleepTimerRequest(String raw, String normalized) {
+        boolean asksSleepTimer = has(normalized,
+                "مؤقت النوم", "مؤقت ايقاف التشغيل", "مؤقت اطفاء التشغيل",
+                "مؤقت اطفاء التلفزيون", "مؤقت اغلاق التلفزيون", "وقت النوم",
+                "sleep timer", "turn off tv in", "power off timer",
+                "اطفي التلفزيون بعد", "اقفل التلفزيون بعد", "اطفاء التلفزيون بعد",
+                "اغلق التلفزيون بعد", "خلي التلفزيون يقفل بعد");
+        if (!asksSleepTimer) return false;
+
+        // Android has no universal public API for vendor-specific TV sleep timers.
+        // Do not claim activation unless the TV confirms it.
+        try {
+            Intent settings = new Intent(Settings.ACTION_SETTINGS);
+            startActivity(settings);
+            reply("أمر مؤقت إيقاف التشغيل مفهوم. فتحت إعدادات التلفزيون، لكن أندرويد لا يوفر أمرًا عامًا يسمح للتطبيق بضبط مؤقت الشركة المصنّعة تلقائيًا. افتح قسم النظام أو الطاقة، ثم مؤقت إيقاف التشغيل، واختر 30 دقيقة وأكّد. إذا ظهر المؤقت ضمن لوحة الإعدادات السريعة في تلفزيونك، يمكنك فتحه من هناك. لم يتم تفعيل المؤقت تلقائيًا.");
+        } catch (Exception e) {
+            reply("تعذر فتح إعدادات التلفزيون. استخدم زر الإعدادات في الريموت، ثم قسم النظام أو الطاقة، ثم مؤقت إيقاف التشغيل واختر المدة المطلوبة. لم يتم تفعيل المؤقت.");
+        }
+        return true;
+    }
+
     protected void sendToAi(String message) {
         String normalizedRequest = normalize(message);
+        if (tryHandleSleepTimerRequest(message, normalizedRequest)) return;
         if (tryHandleLiveInfo(message, normalizedRequest)) return;
         if (tryHandleYouTubeSearch(message, normalizedRequest)) return;
         if (has(normalizedRequest,
