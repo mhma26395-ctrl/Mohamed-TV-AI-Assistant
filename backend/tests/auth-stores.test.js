@@ -62,6 +62,38 @@ test("expired challenges are rejected", async () => {
   assert.equal(result.body.ok, false);
 });
 
+test("challenge expires at the exact 120-second boundary", async () => {
+  const storage = new MemoryStorage();
+  const store = new AuthChallengeStore({ storage });
+  const challenge = { installId: "device-1", purpose: "session" };
+  await store.fetch(request("/create", challenge));
+  const saved = storage.values.get("challenge");
+  saved.createdAt = Date.now() - 120000;
+  storage.values.set("challenge", saved);
+  const result = await read(await store.fetch(request("/consume", challenge)));
+  assert.equal(result.status, 401);
+  assert.equal(result.body.ok, false);
+});
+
+test("challenge rejects future or malformed creation timestamps", async () => {
+  const storage = new MemoryStorage();
+  const store = new AuthChallengeStore({ storage });
+  const challenge = { installId: "device-1", purpose: "session" };
+  await store.fetch(request("/create", challenge));
+  const saved = storage.values.get("challenge");
+  saved.createdAt = Date.now() + 1000;
+  storage.values.set("challenge", saved);
+  const future = await read(await store.fetch(request("/consume", challenge)));
+  assert.equal(future.status, 401);
+
+  await store.fetch(request("/create", challenge));
+  const malformed = storage.values.get("challenge");
+  malformed.createdAt = NaN;
+  storage.values.set("challenge", malformed);
+  const invalid = await read(await store.fetch(request("/consume", challenge)));
+  assert.equal(invalid.status, 401);
+});
+
 test("challenge alarm removes stored challenge", async () => {
   const storage = new MemoryStorage();
   const store = new AuthChallengeStore({ storage });
