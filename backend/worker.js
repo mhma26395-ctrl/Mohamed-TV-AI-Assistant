@@ -433,10 +433,10 @@ async function authRoutes(request, env, url) {
     if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
     if (!env.DEVICE_ADMIN_SECRET || env.DEVICE_ADMIN_SECRET.length < 32 || !env.AUTH_DEVICES || !env.ADMIN_LIMITER) return json({ error: "admin_service_unavailable" }, 503);
     const ip = request.headers.get("cf-connecting-ip") || "unknown";
-    if (!await rateLimit(env.ADMIN_LIMITER, "device-admin:" + ip)) return json({ error: "rate_limited" }, 429);
+    if (!await rateLimit(env.ADMIN_LIMITER, "device-admin:" + ip)) { await recordSecurityEvent(env, "rate_limited"); return json({ error: "rate_limited" }, 429); }
     const supplied = request.headers.get("authorization") || "";
     const candidate = supplied.startsWith("Bearer ") ? supplied.slice(7) : "";
-    if (!constantTimeSecretEqual(candidate, env.DEVICE_ADMIN_SECRET)) return json({ error: "not_found" }, 404);
+    if (!constantTimeSecretEqual(candidate, env.DEVICE_ADMIN_SECRET)) { await recordSecurityEvent(env, "admin_rejected"); return json({ error: "not_found" }, 404); }
     let body; try { body = await request.json(); } catch { return json({ error: "invalid_request" }, 400); }
     if (!isObject(body) || !validInstallId(body.installId)) return json({ error: "invalid_request" }, 400);
     const operation = url.pathname.endsWith("/approve") ? "approve" : "revoke";
@@ -450,7 +450,7 @@ async function authRoutes(request, env, url) {
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
   if (url.pathname === "/v1/auth/challenge") {
     if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
-    if (!await rateLimit(env.ENROLL_LIMITER, "challenge:" + ip)) return json({ error: "rate_limited" }, 429);
+    if (!await rateLimit(env.ENROLL_LIMITER, "challenge:" + ip)) { await recordSecurityEvent(env, "rate_limited"); return json({ error: "rate_limited" }, 429); }
     let body; try { body = await request.json(); } catch { return json({ error: "invalid_request" }, 400); }
     if (!isObject(body)) return json({ error: "invalid_request" }, 400);
     const id = body.installId;
@@ -468,7 +468,7 @@ async function authRoutes(request, env, url) {
   }
   if (url.pathname === "/v1/auth/enroll") {
     if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
-    if (!await rateLimit(env.ENROLL_LIMITER, "enroll:" + ip)) return json({ error: "rate_limited" }, 429);
+    if (!await rateLimit(env.ENROLL_LIMITER, "enroll:" + ip)) { await recordSecurityEvent(env, "rate_limited"); return json({ error: "rate_limited" }, 429); }
     if (!await rateLimit(env.ENROLL_LIMITER, "enrollment-submit-per-location")) return json({ error: "rate_limited" }, 429);
     let body; try { body = await request.json(); } catch { return json({ error: "invalid_request" }, 400); }
     if (!isObject(body)) return json({ error: "invalid_request" }, 400);
@@ -486,7 +486,7 @@ async function authRoutes(request, env, url) {
   }
   if (url.pathname === "/v1/auth/session") {
     if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
-    if (!await rateLimit(env.ENROLL_LIMITER, "session:" + ip)) return json({ error: "rate_limited" }, 429);
+    if (!await rateLimit(env.ENROLL_LIMITER, "session:" + ip)) { await recordSecurityEvent(env, "rate_limited"); return json({ error: "rate_limited" }, 429); }
     let body; try { body = await request.json(); } catch { return json({ error: "invalid_request" }, 400); }
     if (!isObject(body)) return json({ error: "invalid_request" }, 400);
     const { installId: id, nonce, signature: sig } = body;
@@ -505,6 +505,21 @@ async function authRoutes(request, env, url) {
   return json({ error: "not_found" }, 404);
 }
 
+
+
+ // Privacy-preserving daily counters only; no IP, install ID, token, key, or message data.
+async function recordSecurityEvent(env, event) {
+  const allowed = new Set(["auth_rejected", "rate_limited", "enrollment_rejected", "admin_rejected"]);
+  if (!allowed.has(event) || !env.SECURITY_EVENTS) return;
+  try {
+    const stub = env.SECURITY_EVENTS.get(env.SECURITY_EVENTS.idFromName("daily-security-aggregate"));
+    await stub.fetch("https://security-events/increment", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ event, day: new Date().toISOString().slice(0, 10) })
+    });
+  } catch { /* Telemetry is best-effort and must not affect app availability. */ }
+}
 
 export class AuthDeviceStore {
   constructor(state) { this.state = state; }
@@ -559,6 +574,24 @@ export class AuthDeviceStore {
       return json(result, result.ok ? 200 : 404);
     }
     return json({ ok: false }, 404);
+  }
+}
+
+export class SecurityEventStore {
+  constructor(state) { this.state = state; }
+  async fetch(request) {
+    if (request.method !== "POST" || new URL(request.url).pathname !== "/increment") return json({ ok: false }, 404);
+    let body;
+    try { body = await request.json(); } catch { return json({ ok: false }, 400); }
+    const allowed = new Set(["auth_rejected", "rate_limited", "enrollment_rejected", "admin_rejected"]);
+    if (!allowed.has(body?.event) || typeof body.day !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(body.day)) return json({ ok: false }, 400);
+    const key = "daily:" + body.day + ":" + body.event;
+    const count = await this.state.storage.transaction(async txn => {
+      const next = Math.min(Number(await txn.get(key) || 0) + 1, 1000000000);
+      await txn.put(key, next);
+      return next;
+    });
+    return json({ ok: true, count });
   }
 }
 
@@ -618,8 +651,8 @@ export default {
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
     const claims = await verifySession(token, env.SESSION_SIGNING_SECRET, env);
     if (!claims) return json({ error: "authentication_failed" }, 401);
-    if (!await rateLimit(env.DEVICE_RATE_LIMITER, "device:" + claims.sub)) return json({ error: "rate_limited" }, 429);
-    if (!await rateLimit(env.RATE_LIMITER, "ip:" + (request.headers.get("cf-connecting-ip") || "unknown"))) return json({ error: "rate_limited" }, 429);
+    if (!await rateLimit(env.DEVICE_RATE_LIMITER, "device:" + claims.sub)) { await recordSecurityEvent(env, "rate_limited"); return json({ error: "rate_limited" }, 429); }
+    if (!await rateLimit(env.RATE_LIMITER, "ip:" + (request.headers.get("cf-connecting-ip") || "unknown"))) { await recordSecurityEvent(env, "rate_limited"); return json({ error: "rate_limited" }, 429); }
 
     let body;
     try { body = await request.json(); } catch { return json({ error: "invalid_json" }, 400); }
