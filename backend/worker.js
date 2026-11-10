@@ -232,33 +232,72 @@ async function getCurrencyInfo(from, to) {
   return { ok: true, type: "currency", from: base, to: quote, rate, date: data.date, source: "Frankfurter (reference exchange rates)", note: "Reference rate; bank, cash-market and card rates may differ." };
 }
 
-async function getGoldInfo(currency) {
-  const response = await fetch("https://api.gold-api.com/price/XAU", { signal: AbortSignal.timeout(12000) });
-  if (!response.ok) throw new Error("gold_price_provider_unavailable");
-  const data = await response.json();
-  const usdPerOunce = Number(data.price);
-  if (!Number.isFinite(usdPerOunce) || usdPerOunce <= 0) throw new Error("invalid_gold_price");
+export async function getGoldInfo(currency, fetcher = fetch) {
   const code = String(currency || "USD").toUpperCase();
-  let conversion = 1;
-  let fxDate = new Date().toISOString().slice(0,10);
-  if (code !== "USD") {
-    const fx = await getCurrencyInfo("USD", code);
-    if (!fx.ok) return fx;
-    conversion = fx.rate; fxDate = fx.date;
+  if (!/^[A-Z]{3}$/.test(code)) return { ok: false, error: "invalid_currency" };
+
+  // Primary provider: Gold-API spot price, converted with Frankfurter FX.
+  try {
+    const response = await fetcher("https://api.gold-api.com/price/XAU", { signal: AbortSignal.timeout(12000) });
+    if (!response.ok) throw new Error("gold_price_provider_unavailable");
+    const data = await response.json();
+    const usdPerOunce = Number(data.price);
+    if (!Number.isFinite(usdPerOunce) || usdPerOunce <= 0) throw new Error("invalid_gold_price");
+    let conversion = 1;
+    let fxDate = new Date().toISOString().slice(0,10);
+    if (code !== "USD") {
+      const fx = await getCurrencyInfo("USD", code);
+      if (!fx.ok) throw new Error("gold_fx_provider_unavailable");
+      conversion = fx.rate;
+      fxDate = fx.date;
+    }
+    const perGram24 = usdPerOunce * conversion / 31.1034768;
+    return {
+      ok: true, type: "gold", currency: code, unit: "gram",
+      pricePerGram: {
+        "24K": Number(perGram24.toFixed(2)),
+        "21K": Number((perGram24 * 21 / 24).toFixed(2)),
+        "18K": Number((perGram24 * 18 / 24).toFixed(2))
+      },
+      spotPerOunce: Number((usdPerOunce * conversion).toFixed(2)),
+      updatedAt: data.updatedAt || data.timestamp || null,
+      fxDate, source: "Gold-API spot XAU + Frankfurter FX",
+      stale: false,
+      note: "Indicative spot-derived estimate, not a local jeweler quote; excludes workmanship, taxes and retail premiums."
+    };
+  } catch (primaryError) {
+    // Independent fallback provides gold already converted to the requested
+    // currency and gram unit, so it does not depend on the FX provider.
+    try {
+      const fallbackUrl = "https://xaus.com/api/v1/spot?currency=" + encodeURIComponent(code) + "&unit=gram&compact=1";
+      const response = await fetcher(fallbackUrl, { signal: AbortSignal.timeout(12000) });
+      if (!response.ok) throw new Error("gold_fallback_provider_unavailable");
+      const data = await response.json();
+      const perGram24 = Number(data?.xau?.price);
+      if (!Number.isFinite(perGram24) || perGram24 <= 0) throw new Error("invalid_fallback_gold_price");
+      const state = data?.data_state?.status || (data.stale ? "stale" : "fresh");
+      if (state === "unavailable") throw new Error("gold_price_unavailable");
+      const ageSeconds = Number(data?.data_state?.age_seconds);
+      if (state === "stale" && Number.isFinite(ageSeconds) && ageSeconds > 21600) {
+        throw new Error("gold_price_too_old");
+      }
+      return {
+        ok: true, type: "gold", currency: code, unit: "gram",
+        pricePerGram: {
+          "24K": Number(perGram24.toFixed(2)),
+          "21K": Number((perGram24 * 21 / 24).toFixed(2)),
+          "18K": Number((perGram24 * 18 / 24).toFixed(2))
+        },
+        spotPerOunce: Number((perGram24 * 31.1034768).toFixed(2)),
+        updatedAt: data.price_as_of || data.updated_at || null,
+        fxDate: null, source: "XAUS spot gold + currency conversion",
+        stale: state === "stale" || data.fx_stale === true,
+        note: "Indicative spot-derived estimate, not a local jeweler quote; excludes workmanship, taxes and retail premiums."
+      };
+    } catch (fallbackError) {
+      throw new Error("gold_providers_unavailable");
+    }
   }
-  const perGram24 = usdPerOunce * conversion / 31.1034768;
-  const stamp = data.updatedAt || data.timestamp || null;
-  return {
-    ok: true, type: "gold", currency: code, unit: "gram",
-    pricePerGram: {
-      "24K": Number(perGram24.toFixed(2)),
-      "21K": Number((perGram24 * 21 / 24).toFixed(2)),
-      "18K": Number((perGram24 * 18 / 24).toFixed(2))
-    },
-    spotPerOunce: Number((usdPerOunce * conversion).toFixed(2)),
-    updatedAt: stamp, fxDate, source: "Gold-API spot XAU + Frankfurter FX",
-    note: "Indicative spot-derived estimate, not a local jeweler quote; excludes workmanship, taxes and retail premiums."
-  };
 }
 
 async function getNewsInfo(query, locale) {
