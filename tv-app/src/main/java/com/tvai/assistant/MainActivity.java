@@ -160,9 +160,9 @@ public class MainActivity extends Activity {
             setStatus("Speech language changed / تم تغيير لغة التعرف على الصوت");
         });
         root.addView(lang);
-        Button floating = button("Enable floating AI button / تفعيل الزر العائم");
-        floating.setOnClickListener(v -> enableFloatingAssistant());
-        root.addView(floating);
+        Button disneyTest = button("Test Disney+ remote button / اختبار زر Disney+");
+        disneyTest.setOnClickListener(v -> openDisneyKeyTest());
+        root.addView(disneyTest);
         Button usage = button("Check Usage Access / فحص إذن التطبيقات");
         usage.setOnClickListener(v -> { if (hasUsageAccess()) reply("إذن Usage Access مفعّل بالفعل."); else openUsageAccessSettings(); });
         root.addView(usage);
@@ -587,6 +587,16 @@ public class MainActivity extends Activity {
         try { startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)); reply("افتح Mohamed TV AI Assistant وفعّل السماح بالوصول إلى بيانات الاستخدام، ثم ارجع إلى التطبيق."); }
         catch (Exception e) { getPreferences(MODE_PRIVATE).edit().putBoolean("pending_usage_check", false).apply(); reply("تعذر فتح صفحة Usage Access. افتح إعدادات الجهاز ثم التطبيقات ثم Special app access ثم Usage access إن كانت متاحة."); }
     }
+    private void openDisneyKeyTest() {
+        getSharedPreferences("remote_key_probe", MODE_PRIVATE).edit().remove("last_key_code").apply();
+        try {
+            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+            reply("افتح خدمة Mohamed TV AI Remote Key Test وفعّلها، ثم ارجع للتطبيق واضغط زر Disney+ مرة واحدة. سنسجل كود الزر فقط دون اعتراضه في هذا الاختبار.");
+        } catch (Exception e) {
+            reply("تعذر فتح إعدادات Accessibility. افتح إعدادات الجهاز ثم Accessibility يدويًا.");
+        }
+    }
+
     private void enableFloatingAssistant() {
         if (Build.VERSION.SDK_INT >= 23 && !Settings.canDrawOverlays(this)) {
             getPreferences(MODE_PRIVATE).edit().putBoolean("pending_overlay_enable", true).apply();
@@ -602,6 +612,13 @@ public class MainActivity extends Activity {
     }
     @Override protected void onResume() {
         super.onResume();
+        android.content.SharedPreferences probe = getSharedPreferences("remote_key_probe", MODE_PRIVATE);
+        int lastKeyCode = probe.getInt("last_key_code", -1);
+        if (lastKeyCode >= 0) {
+            String keyName = probe.getString("last_key_name", "UNKNOWN");
+            long when = probe.getLong("last_key_time", 0L);
+            setStatus("آخر زر مرصود: " + keyName + " (KEYCODE " + lastKeyCode + "). اضغط Disney+ الآن للاختبار.");
+        }
         if (getPreferences(MODE_PRIVATE).getBoolean("pending_usage_check", false)) {
             getPreferences(MODE_PRIVATE).edit().putBoolean("pending_usage_check", false).apply();
             if (hasUsageAccess()) reply("تم منح Usage Access بنجاح. يمكنك الآن طلب التطبيقات التي استخدمها النظام مؤخرًا.");
