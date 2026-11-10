@@ -196,7 +196,7 @@ public class MainActivity extends Activity {
         TextView foot = label("Version 0.6.0 · Remote key mapping requires Accessibility permission. Overlay requires separate permission. No root access is used.");
         foot.setTextSize(13);
         root.addView(foot);
-        micButton.requestFocus();
+        if (micButton != null) micButton.requestFocus();
     }
 
     private TextView label(String text) {
