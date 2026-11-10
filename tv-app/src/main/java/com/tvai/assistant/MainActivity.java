@@ -68,6 +68,7 @@ public class MainActivity extends Activity {
     private EditText messageInput;
     private final ExecutorService network = Executors.newSingleThreadExecutor();
     private static final String API_URL = "https://mohamed-tv-ai-backend.mhma26395.workers.dev/v1/assistant";
+    private static final String INFO_API_URL = "https://mohamed-tv-ai-backend.mhma26395.workers.dev/v1/info";
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -355,6 +356,104 @@ public class MainActivity extends Activity {
         reply("I did not recognize that command yet. Try: open YouTube, Downloader, VPN settings, language settings or network settings. / لم أفهم الأمر بعد. جرّب أمرًا من الأوامر المدعومة أو افتح المساعدة.");
     }
 
+
+
+    private String detectInfoCity(String normalized) {
+        String[][] cities = {
+            {"القاهرة","القاهره","cairo"}, {"لندن","london"}, {"لوس انجلوس","los angeles"},
+            {"نيويورك","new york"}, {"باريس","paris"}, {"الرياض","riyadh"}, {"دبي","dubai"},
+            {"مكه","مكة","mecca"}, {"طوكيو","tokyo"}, {"اسطنبول","istanbul"}
+        };
+        for (String[] group : cities) for (String city : group) {
+            if (normalized.contains(city)) {
+                if ("القاهره".equals(city)) return "Cairo";
+                if ("لندن".equals(city)) return "London";
+                if ("لوس انجلوس".equals(city)) return "Los Angeles";
+                if ("نيويورك".equals(city)) return "New York";
+                if ("باريس".equals(city)) return "Paris";
+                if ("الرياض".equals(city)) return "Riyadh";
+                if ("دبي".equals(city)) return "Dubai";
+                if ("مكه".equals(city) || "مكة".equals(city)) return "Mecca";
+                if ("طوكيو".equals(city)) return "Tokyo";
+                if ("اسطنبول".equals(city)) return "Istanbul";
+                return city;
+            }
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:في|بمدينه|بمدينة|in)\\s+([\\p{L}][\\p{L} .'-]{1,40})").matcher(normalized);
+        if (m.find()) return m.group(1).trim();
+        return "";
+    }
+
+    private boolean tryHandleLiveInfo(String raw, String normalized) {
+        boolean asksTime = has(normalized, "الوقت", "الساعه كام", "كم الساعه", "time now", "current time", "what time");
+        boolean asksWeather = has(normalized, "الطقس", "الجو", "درجه الحراره", "حاله الطقس", "weather", "temperature", "forecast");
+        if (!asksTime && !asksWeather) return false;
+        String city = detectInfoCity(normalized);
+        if (city.isEmpty()) {
+            reply("حدد المدينة من فضلك، مثل القاهرة أو لندن أو لوس أنجلوس.");
+            return true;
+        }
+        String token = getSharedPreferences("assistant_settings", MODE_PRIVATE).getString("access_token", getPreferences(MODE_PRIVATE).getString("access_token", "")).trim();
+        if (token.isEmpty()) { reply("احفظ Access Token أولاً من خانة الاتصال."); return true; }
+        final String type = asksWeather ? "weather" : "time";
+        setStatus("جاري جلب " + (asksWeather ? "الطقس" : "الوقت") + " من مصدر مباشر…");
+        network.execute(() -> {
+            HttpURLConnection connection = null;
+            try {
+                connection = (HttpURLConnection) new URL(INFO_API_URL).openConnection();
+                connection.setRequestMethod("POST");
+                connection.setConnectTimeout(15000);
+                connection.setReadTimeout(25000);
+                connection.setDoOutput(true);
+                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                connection.setRequestProperty("Authorization", "Bearer " + token);
+                JSONObject payload = new JSONObject();
+                payload.put("type", type);
+                payload.put("location", city);
+                payload.put("locale", speechLanguage);
+                try (OutputStream out = connection.getOutputStream()) {
+                    out.write(payload.toString().getBytes(StandardCharsets.UTF_8));
+                }
+                int code = connection.getResponseCode();
+                java.io.InputStream stream = code >= 200 && code < 400 ? connection.getInputStream() : connection.getErrorStream();
+                java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+                byte[] chunk = new byte[2048]; int count;
+                while ((count = stream.read(chunk)) != -1) buffer.write(chunk, 0, count);
+                JSONObject result = new JSONObject(new String(buffer.toByteArray(), StandardCharsets.UTF_8));
+                String answer;
+                if (code != 200 || !result.optBoolean("ok", false)) {
+                    answer = "تعذر جلب " + (asksWeather ? "بيانات الطقس" : "الوقت") + " حاليًا. " +
+                            (result.optString("error", "").equals("location_not_found") ? "لم أتعرف على اسم المدينة." : "تحقق من اتصال الإنترنت وحاول مرة أخرى.");
+                } else if ("time".equals(type)) {
+                    answer = "الوقت الآن في " + city + ": " + result.optString("localDateTime") +
+                            "\\nالمنطقة الزمنية: " + result.optString("timezone");
+                } else {
+                    JSONObject current = result.optJSONObject("current");
+                    StringBuilder report = new StringBuilder("الطقس الآن في ").append(result.optString("location"))
+                            .append("\\nالحالة: ").append(current == null ? "غير متاحة" : current.optString("condition"))
+                            .append("\\nدرجة الحرارة: ").append(current == null ? "—" : current.optString("temperatureC")).append("°C")
+                            .append("\\nالمحسوسة: ").append(current == null ? "—" : current.optString("feelsLikeC")).append("°C")
+                            .append("\\nالرطوبة: ").append(current == null ? "—" : current.optString("humidityPercent")).append("%")
+                            .append("\\nسرعة الرياح: ").append(current == null ? "—" : current.optString("windSpeedKmh")).append(" كم/س");
+                    JSONArray forecast = result.optJSONArray("forecast");
+                    if (forecast != null) for (int i = 0; i < forecast.length(); i++) {
+                        JSONObject day = forecast.optJSONObject(i);
+                        if (day != null) report.append("\\n").append(day.optString("date")).append(": ")
+                                .append(day.optString("condition")).append("، العظمى ")
+                                .append(day.optString("highC")).append("° والصغرى ")
+                                .append(day.optString("lowC")).append("°");
+                    }
+                    report.append("\\nالمصدر: Open-Meteo · التحديث: ").append(result.optString("observedAt"));
+                    answer = report.toString();
+                }
+                final String finalAnswer = answer;
+                runOnUiThread(() -> reply(finalAnswer));
+            } catch (Exception e) {
+                runOnUiThread(() -> reply("تعذر الاتصال بمصدر المعلومات المباشرة. حاول مرة أخرى عند توفر الإنترنت."));
+            } finally { if (connection != null) connection.disconnect(); }
+        });
+        return true;
+    }
 
     protected void sendToAi(String message) {
         String normalizedRequest = normalize(message);
