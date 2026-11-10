@@ -827,11 +827,36 @@ public class MainActivity extends Activity {
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
     }
 
+    private boolean isRemoteKeyAccessibilityEnabled() {
+        android.view.accessibility.AccessibilityManager manager =
+                (android.view.accessibility.AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
+        if (manager == null) return false;
+        String expectedClass = new android.content.ComponentName(this, RemoteKeyProbeService.class).getClassName();
+        for (android.accessibilityservice.AccessibilityServiceInfo service :
+                manager.getEnabledAccessibilityServiceList(
+                        android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK)) {
+            if (service != null && service.getResolveInfo() != null
+                    && service.getResolveInfo().serviceInfo != null) {
+                android.content.pm.ServiceInfo info = service.getResolveInfo().serviceInfo;
+                if (getPackageName().equals(info.packageName) && expectedClass.equals(info.name)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private void beginRemoteKeyCapture() {
+        if (!isRemoteKeyAccessibilityEnabled()) {
+            getSharedPreferences("remote_key_probe", MODE_PRIVATE).edit()
+                    .putBoolean("capture_armed", false).apply();
+            reply("خدمة اكتشاف أزرار الريموت غير مفعّلة بعد. فعّل Mohamed TV AI Remote Key Test من إعدادات تسهيل الاستخدام، ثم ارجع للتطبيق واضغط اكتشاف زر مرة أخرى.");
+            openRemoteAccessibilitySettings();
+            return;
+        }
         getSharedPreferences("remote_key_probe", MODE_PRIVATE).edit()
             .putBoolean("capture_armed", true).remove("captured_key_code").remove("captured_key_name").apply();
-        reply("وضع اكتشاف الأزرار جاهز. اضغط الزر المطلوب في الريموت مرة واحدة، ثم ارجع للتطبيق لعرض النتيجة. إذا لم يظهر شيء فقد يمنع النظام رصد هذا الزر.");
-        openRemoteAccessibilitySettings();
+        reply("خدمة اكتشاف الأزرار مفعّلة. اضغط الزر المطلوب من الريموت مرة واحدة، ثم ارجع للتطبيق لعرض النتيجة. لن نفتح إعدادات تسهيل الاستخدام مرة أخرى. إذا لم يظهر شيء فقد يمنع النظام رصد هذا الزر.");
     }
 
     private void openRemoteAccessibilitySettings() {
