@@ -46,9 +46,17 @@ class_name = "AuthChallengeStore"
 name = "AUTH_DEVICES"
 class_name = "AuthDeviceStore"
 
+[[durable_objects.bindings]]
+name = "SECURITY_EVENTS"
+class_name = "SecurityEventStore"
+
 [[migrations]]
 tag = "auth-v1"
 new_sqlite_classes = ["AuthChallengeStore", "AuthDeviceStore"]
+
+[[migrations]]
+tag = "security-telemetry-v1"
+new_sqlite_classes = ["SecurityEventStore"]
 
 # Isolated staging Worker. Bindings and vars are repeated because Wrangler
 # environments do not inherit them. Secrets must be added separately with --env staging.
@@ -86,6 +94,14 @@ class_name = "AuthChallengeStore"
 name = "AUTH_DEVICES"
 class_name = "AuthDeviceStore"
 
+[[env.staging.durable_objects.bindings]]
+name = "SECURITY_EVENTS"
+class_name = "SecurityEventStore"
+
 [[env.staging.migrations]]
 tag = "auth-staging-v1"
 new_sqlite_classes = ["AuthChallengeStore", "AuthDeviceStore"]
+
+[[env.staging.migrations]]
+tag = "security-telemetry-staging-v1"
+new_sqlite_classes = ["SecurityEventStore"]
