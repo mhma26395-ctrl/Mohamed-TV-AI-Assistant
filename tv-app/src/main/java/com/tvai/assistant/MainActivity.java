@@ -185,7 +185,7 @@ public class MainActivity extends Activity {
 
         transcript = label("You said / قلت: —");
         root.addView(transcript);
-        response = label("Assistant / المساعد: Try: افتح يوتيوب، افتح إعدادات VPN، افتح داونلودر.");
+        response = label("جرّب: افتح يوتيوب، ابحث عن أغنية أو قناة على يوتيوب، أو افتح إعدادات VPN.");
         root.addView(response);
         root.addView(label("Quick actions / أوامر سريعة"));
 
@@ -304,8 +304,7 @@ public class MainActivity extends Activity {
             return;
         }
         if (has(c, "vpn", "في بي ان", "الفي بي ان", "في بي اين", "الفي بي اين", "شبكه افتراضيه", "برنامج vpn", "اعدادات vpn")) {
-            launchIntentWithFallback(new Intent(Settings.ACTION_VPN_SETTINGS), new Intent(Settings.ACTION_WIRELESS_SETTINGS),
-                    "VPN settings", "تم فتح إعدادات الشبكة أو VPN. اختر تطبيق VPN ووافق على الاتصال يدويًا؛ لا يمكن للتطبيق تفعيل VPN دون موافقتك. / VPN or network settings opened. Select your VPN and approve the connection; Android requires your consent.");
+            openVpnSettingsOrApp();
             return;
         }
         if (has(c, "اللغه", "لغه الجهاز", "حول لغه الجهاز", "غير لغه الجهاز", "غير اللغه", "تغيير اللغه", "اللغه الانجليزيه", "للانجليزيه", "انجليزي", "خلي الجهاز انجليزي", "english language", "device language", "language settings")) {
@@ -514,6 +513,7 @@ public class MainActivity extends Activity {
     protected void sendToAi(String message) {
         String normalizedRequest = normalize(message);
         if (tryHandleLiveInfo(message, normalizedRequest)) return;
+        if (tryHandleYouTubeSearch(message, normalizedRequest)) return;
         if (has(normalizedRequest,
                 "التطبيقات اللي شغاله في الخلفيه", "التطبيقات الشغاله في الخلفيه",
                 "تطبيقات الخلفيه", "ايه التطبيقات المفتوحه", "التطبيقات المفتوحه",
@@ -783,7 +783,7 @@ public class MainActivity extends Activity {
         menu.setPadding(28, 12, 28, 12);
 
         TextView summary = label("الزر المختار: " + mappedName + "\\nالحالة: " + state
-                + "\\n\\nاختر العملية المطلوبة من الأزرار التالية. بعض أزرار الريموت قد يمنع Firmware الجهاز اعتراضها.");
+                + "\\n\\nالخطوة 1: اضغط «اكتشاف زر» ثم اضغط الزر المطلوب في الريموت مرة واحدة.\\nالخطوة 2: ارجع لهذه القائمة واضغط «تفعيل الزر المختار للمساعد».\\n\\nاكتشاف الزر لا يفعّله تلقائيًا. بعض أزرار الريموت قد يمنع نظام التلفزيون رصدها.");
         menu.addView(summary);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
@@ -1111,6 +1111,81 @@ public class MainActivity extends Activity {
         reply(message);
     }
 
+
+    private void openVpnSettingsOrApp() {
+        try {
+            Intent settings = new Intent(Settings.ACTION_VPN_SETTINGS);
+            settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(settings);
+            reply("تم فتح صفحة إعدادات VPN في النظام. إذا لم تعرض التطبيقات المثبتة، استخدم أمر «افتح تطبيق VPN».");
+            return;
+        } catch (Exception ignored) {}
+
+        JSONArray apps = getInstalledLaunchableAppsJson();
+        ArrayList<JSONObject> vpnApps = new ArrayList<>();
+        for (int i = 0; i < apps.length(); i++) {
+            JSONObject app = apps.optJSONObject(i);
+            if (app == null) continue;
+            String name = normalize(app.optString("name", ""));
+            String pkg = normalize(app.optString("packageName", ""));
+            if (name.contains("vpn") || pkg.contains("vpn")) vpnApps.add(app);
+        }
+        if (vpnApps.size() == 1) {
+            JSONObject app = vpnApps.get(0);
+            launchPackage(app.optString("packageName"), app.optString("name"));
+        } else if (vpnApps.size() > 1) {
+            String[] labels = new String[vpnApps.size()];
+            for (int i = 0; i < vpnApps.size(); i++) labels[i] = vpnApps.get(i).optString("name");
+            new AlertDialog.Builder(this).setTitle("اختر تطبيق VPN")
+                    .setItems(labels, (dialog, which) -> {
+                        JSONObject app = vpnApps.get(which);
+                        launchPackage(app.optString("packageName"), app.optString("name"));
+                    }).setNegativeButton("إلغاء", null).show();
+        } else {
+            launchIntentWithFallback(new Intent(Settings.ACTION_WIRELESS_SETTINGS), new Intent(Settings.ACTION_SETTINGS),
+                    "VPN settings", "صفحة VPN غير متاحة مباشرة على هذا التلفزيون، ولم أجد تطبيق VPN قابلاً للتشغيل باسمه. افتح إعدادات الشبكة أو شغّل تطبيق VPN من قائمة التطبيقات.");
+        }
+    }
+
+    private boolean tryHandleYouTubeSearch(String raw, String normalized) {
+        boolean mentionsYouTube = has(normalized, "يوتيوب", "youtube");
+        boolean contentRequest = has(normalized, "اغنيه", "اغاني", "قناه", "فيديو", "ابحث", "دور على", "شغل", "اعرض", "search");
+        if (!mentionsYouTube || !contentRequest) return false;
+
+        String query = normalized;
+        String[] remove = {"من اليوتيوب", "على اليوتيوب", "في اليوتيوب", "باليوتيوب", "على youtube", "in youtube", "on youtube",
+                "ابحث لي عن", "ابحث عن", "ابحث", "دور على", "دورلي على", "شغل لي", "شغل", "افتح", "اعرض لي", "اعرض",
+                "اغنيه", "اغاني", "قناه", "فيديو", "youtube", "يوتيوب", "من فضلك", "لو سمحت"};
+        for (String part : remove) query = query.replace(part, " ");
+        query = query.replaceAll("\\s+", " ").trim();
+        if (query.isEmpty()) {
+            launchYouTube();
+            return true;
+        }
+
+        String url = "https://www.youtube.com/results?search_query=" +
+                java.net.URLEncoder.encode(query, StandardCharsets.UTF_8);
+        String[] packages = {"com.google.android.youtube.tv", "com.google.android.youtube", "com.google.android.youtube.tvunplugged"};
+        for (String pkg : packages) {
+            try {
+                Intent search = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                search.setPackage(pkg);
+                search.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(search);
+                reply("فتحت نتائج بحث يوتيوب عن: " + query + ". اختر النتيجة المطلوبة؛ تشغيل المحتوى يعتمد على التطبيق والنتائج المتاحة.");
+                return true;
+            } catch (Exception ignored) {}
+        }
+        try {
+            Intent search = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            startActivity(search);
+            reply("فتحت رابط نتائج البحث عن: " + query + ". إذا لم يفتح داخل تطبيق YouTube، افتح التطبيق وابحث عن العبارة نفسها.");
+        } catch (Exception e) {
+            reply("تعذر فتح نتائج YouTube على هذا التلفزيون. جرّب فتح YouTube والبحث يدويًا عن: " + query);
+        }
+        return true;
+    }
+
     private void launchYouTube() {
         String[] packages = {"com.google.android.youtube.tv", "com.google.android.youtube", "com.google.android.youtube.tvunplugged"};
         for (String pkg : packages) {
@@ -1165,7 +1240,12 @@ public class MainActivity extends Activity {
     protected void setStatus(String s) { if (status != null) status.setText(s); }
 
     protected void reply(String s) {
-        response.setText("Assistant / المساعد: " + s);
+        String clean = s == null ? "" : s.replace("\\n", "\n").replace("\\r", "");
+        boolean arabic = clean.matches("(?s).*?[\\u0600-\\u06FF].*");
+        response.setText(android.text.BidiFormatter.getInstance(arabic).unicodeWrap(clean));
+        response.setTextDirection(arabic ? View.TEXT_DIRECTION_RTL : View.TEXT_DIRECTION_LTR);
+        response.setGravity(arabic ? Gravity.RIGHT : Gravity.LEFT);
+        response.setTextAlignment(View.TEXT_ALIGNMENT_GRAVITY);
         setStatus("Ready · جاهز");
         if (ttsReady) {
             Locale l = s.matches(".*[\\u0600-\\u06FF].*") ? new Locale("ar") : Locale.US;
