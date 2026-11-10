@@ -167,15 +167,17 @@ The manual `APP_ACCESS_TOKEN` entry is a development-only mechanism and must not
 
 ### Implementation progress (source only)
 - [x] Add Worker challenge, first-enrollment, public-key verification, short-lived HMAC session issuance, and per-request device-status/session verification routes.
-- [x] Require device registry, session signing secret, IP/device rate-limit bindings, and enrollment rate-limit binding; fail closed when required configuration is absent.
-- [x] Add Android P-256 signing-key generation through Android Keystore and automatic enrollment/session acquisition.
+- [x] Require strongly consistent device/challenge Durable Objects, session signing secret, IP/device rate-limit bindings, and enrollment rate-limit binding; fail closed when required configuration is absent.
+- [x] Add Android P-256 signing-key generation through Android Keystore, automatic enrollment/session acquisition, and a fresh installation identity if the local signing key is lost.
+- [x] Move device records and single-use challenges to transactional Durable Objects; tighten JWT claim validation and DER ECDSA signature parsing.
+- [x] Add backend source-check workflow for JavaScript syntax and Wrangler dry-run validation.
 - [x] Remove manual Access Token entry UI and legacy token reads; clear old saved token preferences at app startup.
 - [x] Document Cloudflare binding/secret setup, rate-limit guidance, revocation, and known limitations in `backend/SECURITY-DEPLOYMENT.md`.
 - [ ] Configure Cloudflare staging bindings and secrets; run Worker endpoint tests.
 - [ ] Compile Android app and test Keystore key generation/signing on Android TV devices.
 - [ ] Test enrollment, challenge replay, invalid signatures, session expiry, revocation, key rotation, quota enforcement, and concurrent requests.
 - [ ] Perform security review/penetration testing and confirm no secrets or private keys leak into APK/logs.
-- **Status:** Authentication source code is committed, but not built, deployed, or validated. The Worker will return 503 until required Cloudflare bindings/secrets are configured. This is not a security certification and must not be released yet.
+- **Status:** Authentication source code is committed, but not built, deployed, or validated. The Worker will return 503 until required Cloudflare bindings/secrets are configured. The new backend CI workflow is configured, but its successful run still needs confirmation. This is not a security certification and must not be released yet.
 
 ### Required design
 - Use an Android Keystore-backed, per-install asymmetric key pair (P-256 / ECDSA SHA-256 for Android API compatibility). The private key must be non-exportable where the platform supports it; never serialize it into preferences, logs, crash reports, or network payloads.
