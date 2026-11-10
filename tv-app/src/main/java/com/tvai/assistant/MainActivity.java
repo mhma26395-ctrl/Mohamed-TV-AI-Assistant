@@ -56,6 +56,8 @@ import android.graphics.drawable.GradientDrawable;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** TV-first assistant. Version 0.2.0 adds normalized Arabic/English command aliases. */
 public class MainActivity extends Activity {
@@ -547,28 +549,76 @@ public class MainActivity extends Activity {
             return true;
         }
         try {
-            if (has(normalized, "اكتم الصوت", "كتم الصوت", "اجعل الصوت صامت", "صامت", "mute", "silence")) {
-                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, AudioManager.FLAG_SHOW_UI);
-                reply("تم إرسال أمر كتم الصوت إلى نظام التلفزيون.");
-                return true;
-            }
+            // Check unmute before mute because "الغاء كتم الصوت" contains "كتم الصوت".
             if (has(normalized, "الغاء كتم الصوت", "الغاء الصامت", "شغل الصوت", "افتح الصوت", "unmute")) {
-                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, AudioManager.FLAG_SHOW_UI);
+                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0);
                 reply("تم إرسال أمر إلغاء كتم الصوت إلى نظام التلفزيون.");
                 return true;
             }
+            if (has(normalized, "اكتم الصوت", "كتم الصوت", "اجعل الصوت صامت", "صامت", "mute", "silence")) {
+                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0);
+                reply("تم إرسال أمر كتم الصوت إلى نظام التلفزيون.");
+                return true;
+            }
+
+            int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+            int current = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+            if (max <= 0) {
+                reply("تعذر قراءة مستوى الصوت من نظام التلفزيون.");
+                return true;
+            }
+
+            // Explicit zero/percentage requests set an exact level instead of changing one step.
+            if (has(normalized, "الصوت لصفر", "الصوت الى صفر", "الصوت صفر",
+                    "خفض الصوت للصفر", "خفض الصوت الى الصفر", "خفض الصوت الى صفر",
+                    "volume to zero", "set volume to zero", "zero volume")) {
+                audio.setStreamVolume(AudioManager.STREAM_MUSIC, 0, AudioManager.FLAG_SHOW_UI);
+                reply("تم ضبط مستوى الصوت على صفر.");
+                return true;
+            }
+
+            String numericCommand = normalized
+                    .replace('٠', '0').replace('١', '1').replace('٢', '2')
+                    .replace('٣', '3').replace('٤', '4').replace('٥', '5')
+                    .replace('٦', '6').replace('٧', '7').replace('٨', '8')
+                    .replace('٩', '9')
+                    .replace(" بالمية", "%").replace(" في الميه", "%");
+            Matcher percent = Pattern.compile("(\\d{1,3})\\s*%").matcher(numericCommand);
+            if (percent.find() && has(numericCommand, "الصوت", "volume", "مستوى")) {
+                int requested = Integer.parseInt(percent.group(1));
+                if (requested > 100) requested = 100;
+                int target = Math.round(max * (requested / 100.0f));
+                audio.setStreamVolume(AudioManager.STREAM_MUSIC, target, AudioManager.FLAG_SHOW_UI);
+                int actual = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+                reply("تم ضبط مستوى الصوت على " + Math.round(actual * 100.0f / max) + "% تقريبًا.");
+                return true;
+            }
+
             if (has(normalized, "ارفع الصوت", "علي الصوت", "زود الصوت", "اعلي الصوت", "volume up", "increase volume")) {
-                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI);
-                reply("تم إرسال أمر رفع الصوت إلى نظام التلفزيون.");
+                if (audio.isVolumeFixed()) {
+                    reply("هذا الجهاز لا يسمح للتطبيق بتغيير مستوى الصوت مباشرة.");
+                    return true;
+                }
+                int target = Math.min(max, current + 1);
+                audio.setStreamVolume(AudioManager.STREAM_MUSIC, target, AudioManager.FLAG_SHOW_UI);
+                reply(target == current ? "الصوت عند الحد الأقصى بالفعل." : "تم رفع الصوت درجة واحدة.");
                 return true;
             }
             if (has(normalized, "اخفض الصوت", "وطي الصوت", "خفض الصوت", "قلل الصوت", "volume down", "decrease volume", "lower volume")) {
-                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI);
-                reply("تم إرسال أمر خفض الصوت إلى نظام التلفزيون.");
+                if (audio.isVolumeFixed()) {
+                    reply("هذا الجهاز لا يسمح للتطبيق بتغيير مستوى الصوت مباشرة.");
+                    return true;
+                }
+                int target = Math.max(0, current - 1);
+                audio.setStreamVolume(AudioManager.STREAM_MUSIC, target, AudioManager.FLAG_SHOW_UI);
+                reply(target == current ? "الصوت عند الحد الأدنى بالفعل." : "تم خفض الصوت درجة واحدة.");
                 return true;
             }
+        } catch (SecurityException e) {
+            reply("النظام منع التطبيق من تغيير مستوى الصوت على هذا الجهاز.");
+            return true;
         } catch (Exception e) {
-            reply("نظام التلفزيون لم يسمح بتغيير مستوى الصوت من التطبيق.");
+            reply("تعذر تنفيذ أمر الصوت على هذا التلفزيون.");
             return true;
         }
         return false;
