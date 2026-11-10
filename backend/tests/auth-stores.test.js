@@ -6,7 +6,14 @@ class MemoryStorage {
   constructor() { this.values = new Map(); this.alarmAt = null; }
   async get(key) { return this.values.get(key); }
   async put(key, value) { this.values.set(key, structuredClone(value)); }
-  async delete(key) { return this.values.delete(key); }
+  async delete(key) {
+    if (Array.isArray(key)) {
+      let deleted = false;
+      for (const item of key) deleted = this.values.delete(item) || deleted;
+      return deleted;
+    }
+    return this.values.delete(key);
+  }
   async setAlarm(value) { this.alarmAt = value; }
   async list({ prefix = "" } = {}) { return new Map([...this.values].filter(([key]) => String(key).startsWith(prefix))); }
   async transaction(callback) {
