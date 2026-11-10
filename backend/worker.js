@@ -219,6 +219,65 @@ async function getWeatherInfo(location, locale) {
   };
 }
 
+
+async function getCurrencyInfo(from, to) {
+  const base = String(from || "USD").toUpperCase();
+  const quote = String(to || "EGP").toUpperCase();
+  if (!/^[A-Z]{3}$/.test(base) || !/^[A-Z]{3}$/.test(quote)) return { ok: false, error: "invalid_currency" };
+  const response = await fetch("https://api.frankfurter.app/latest?from=" + base + "&to=" + quote, { signal: AbortSignal.timeout(12000) });
+  if (!response.ok) throw new Error("exchange_rate_provider_unavailable");
+  const data = await response.json();
+  const rate = data.rates?.[quote];
+  if (typeof rate !== "number") return { ok: false, error: "currency_pair_unavailable", from: base, to: quote };
+  return { ok: true, type: "currency", from: base, to: quote, rate, date: data.date, source: "Frankfurter (reference exchange rates)", note: "Reference rate; bank, cash-market and card rates may differ." };
+}
+
+async function getGoldInfo(currency) {
+  const response = await fetch("https://api.gold-api.com/price/XAU", { signal: AbortSignal.timeout(12000) });
+  if (!response.ok) throw new Error("gold_price_provider_unavailable");
+  const data = await response.json();
+  const usdPerOunce = Number(data.price);
+  if (!Number.isFinite(usdPerOunce) || usdPerOunce <= 0) throw new Error("invalid_gold_price");
+  const code = String(currency || "USD").toUpperCase();
+  let conversion = 1;
+  let fxDate = new Date().toISOString().slice(0,10);
+  if (code !== "USD") {
+    const fx = await getCurrencyInfo("USD", code);
+    if (!fx.ok) return fx;
+    conversion = fx.rate; fxDate = fx.date;
+  }
+  const perGram24 = usdPerOunce * conversion / 31.1034768;
+  const stamp = data.updatedAt || data.timestamp || null;
+  return {
+    ok: true, type: "gold", currency: code, unit: "gram",
+    pricePerGram: {
+      "24K": Number(perGram24.toFixed(2)),
+      "21K": Number((perGram24 * 21 / 24).toFixed(2)),
+      "18K": Number((perGram24 * 18 / 24).toFixed(2))
+    },
+    spotPerOunce: Number((usdPerOunce * conversion).toFixed(2)),
+    updatedAt: stamp, fxDate, source: "Gold-API spot XAU + Frankfurter FX",
+    note: "Indicative spot-derived estimate, not a local jeweler quote; excludes workmanship, taxes and retail premiums."
+  };
+}
+
+async function getNewsInfo(query, locale) {
+  const q = cleanLocation(query || "Egypt");
+  const params = new URLSearchParams({
+    query: q + " sourcelang:" + (String(locale || "").startsWith("ar") ? "arabic" : "english"),
+    mode: "ArtList", format: "json", sort: "DateDesc", maxrecords: "8",
+    timespan: "24h", fields: "title,sourceCountry,domain,url,seendate,language"
+  });
+  const response = await fetch("https://api.gdeltproject.org/api/v2/doc/doc?" + params.toString(), { signal: AbortSignal.timeout(15000) });
+  if (!response.ok) throw new Error("news_provider_unavailable");
+  const data = await response.json();
+  const articles = (data.articles || []).slice(0,8).map(item => ({
+    title: item.title || "", source: item.domain || item.sourceCountry || "Unknown",
+    publishedAt: item.seendate || null, url: item.url || ""
+  })).filter(item => item.title && item.url);
+  return { ok: true, type: "news", query: q, articles, source: "GDELT Project", timespan: "24h" };
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -281,7 +340,7 @@ export default {
 
     if (url.pathname === "/v1/info") {
       const infoBody = body;
-      if (!infoBody || !["time", "weather"].includes(infoBody.type) || typeof infoBody.location !== "string" || !infoBody.location.trim() || infoBody.location.length > 100) {
+      if (!infoBody || !["time", "weather", "currency", "gold", "news"].includes(infoBody.type) || (infoBody.type !== "gold" && (!infoBody.location || typeof infoBody.location !== "string" || !infoBody.location.trim() || infoBody.location.length > 100))) {
         return json({ error: "invalid_info_request" }, 400);
       }
       try {
