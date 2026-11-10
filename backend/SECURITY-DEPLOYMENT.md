@@ -8,8 +8,9 @@ Configure these in the Cloudflare Worker environments. The Wrangler file now def
 
 | Binding | Type | Purpose |
 |---|---|---|
-| `AUTH_DEVICES` | Durable Object namespace bound to `AuthDeviceStore` | Strongly consistent device records and atomic enrollment/revocation |\n| `AUTH_CHALLENGES` | Durable Object namespace bound to `AuthChallengeStore` | Atomic, single-use 120-second challenges |
-| `ENROLL_LIMITER` | Rate limiting binding | Per-IP and global throttling for enrollment/challenge/session issuance |
+| `AUTH_DEVICES` | Durable Object namespace bound to `AuthDeviceStore` | Strongly consistent device records and atomic enrollment/revocation |
+| `AUTH_CHALLENGES` | Durable Object namespace bound to `AuthChallengeStore` | Atomic, single-use 120-second challenges |
+| `ENROLL_LIMITER` | Rate limiting binding | Per-IP and per-location aggregate throttling for enrollment/challenge/session issuance |
 | `RATE_LIMITER` | Rate limiting binding | Per-IP API throttling |
 | `DEVICE_RATE_LIMITER` | Rate limiting binding | Per-installation API throttling |
 | `ADMIN_LIMITER` | Rate limiting binding | Per-IP throttling for administrative approval and revocation |
@@ -32,9 +33,21 @@ tag = "auth-v1"
 new_sqlite_classes = ["AuthChallengeStore", "AuthDeviceStore"]
 ```
 
-Both classes are exported from `backend/worker.js`. Configure all four rate-limit bindings listed above in the Cloudflare dashboard; never commit secret values.
+Both classes are exported from `backend/worker.js`. The four rate-limit bindings are declared in `backend/wrangler.toml`; no separate dashboard binding creation is needed when deploying with this configuration. Never commit secret values.
 
-## Staging setup (deploy only after review)\n\nThe staging Worker name is `mohamed-tv-ai-backend-staging`. Wrangler environments do not inherit secrets, vars, or bindings. Add three separate staging secrets directly from a trusted terminal (never paste values into GitHub or chat):\n\n```sh\nwrangler secret put SESSION_SIGNING_SECRET --env staging\nwrangler secret put GROQ_API_KEY --env staging\nwrangler secret put DEVICE_ADMIN_SECRET --env staging\n```\n\nFor the default environment, use the same commands without `--env staging`. Keep staging and production values different. The staging Durable Object migration is tagged `auth-staging-v1`; the default migration remains `auth-v1`. Validate the staging configuration with `npx wrangler deploy --dry-run --env staging --config wrangler.toml` before any real deployment. A dry run does not publish a Worker.\n\n## Required secrets
+## Staging setup (deploy only after review)
+
+The staging Worker name is `mohamed-tv-ai-backend-staging`. Wrangler environments do not inherit secrets, vars, or bindings. Add three separate staging secrets directly from a trusted terminal (never paste values into GitHub or chat):
+
+```sh
+wrangler secret put SESSION_SIGNING_SECRET --env staging
+wrangler secret put GROQ_API_KEY --env staging
+wrangler secret put DEVICE_ADMIN_SECRET --env staging
+```
+
+For the default environment, use the same commands without `--env staging`. Keep staging and production values different. The staging Durable Object migration is tagged `auth-staging-v1`; the default migration remains `auth-v1`. Validate the staging configuration with `npx wrangler deploy --dry-run --env staging --config wrangler.toml` before any real deployment. A dry run does not publish a Worker.
+
+## Required secrets
 
 - `SESSION_SIGNING_SECRET`: at least 32 cryptographically random bytes, encoded as a long random string. Rotate only with a planned session invalidation.
 - `GROQ_API_KEY`: required for assistant inference only; keep it in Worker secrets.
@@ -59,7 +72,7 @@ To revoke an installation, invoke the `revoke` operation on the Durable Object i
 ## Important limitations — do not overstate the protection
 
 - Administrative approval prevents a new public enrollment from immediately receiving API access, but it does not prove that the caller is an authentic copy of this app. A modified client can create a key and submit a pending enrollment; an administrator must review the request before approval.
-- IP/global rate limits and per-device quotas reduce abuse but do not establish app authenticity. Review Cloudflare Turnstile/attestation options compatible with Android TV before claiming stronger anti-abuse guarantees.
+- Per-IP/per-location rate limits and per-device quotas reduce abuse but do not establish app authenticity. Review Cloudflare Turnstile/attestation options compatible with Android TV before claiming stronger anti-abuse guarantees.
 - A random installation UUID is an identifier, not a credential. Device key cloning is harder when the private key is hardware-backed, but hardware-backed storage is not guaranteed on every TV.
 - Android Keystore implementations vary. The app must report key-generation/authentication failure rather than silently fall back to a plain-text or APK-embedded secret.
 - The device registry and challenge store use Durable Objects with transactional storage. Operational availability and correct production migrations still require staging validation.
