@@ -302,3 +302,61 @@ test("device revocation endpoint fails closed without its admin limiter", async 
   const response = await worker.fetch(request("/v1/admin/devices/revoke", { installId }), env);
   assert.equal(response.status, 503);
 });
+
+
+test("new devices remain pending until an administrator approves them", async () => {
+  const storage = new MemoryStorage();
+  const store = new AuthDeviceStore({ storage });
+  const registration = await read(await store.fetch(request("/register", {
+    device: { publicKey: "public-key-A", status: "pending", createdAt: Date.now(), keyVersion: 1 }
+  })));
+  assert.equal(registration.body.ok, true);
+  assert.equal(registration.body.status, "pending");
+  const beforeApproval = await read(await store.fetch(request("/get", {})));
+  assert.equal(beforeApproval.body.device.status, "pending");
+  const approved = await read(await store.fetch(request("/approve", {})));
+  assert.equal(approved.body.ok, true);
+  const afterApproval = await read(await store.fetch(request("/get", {})));
+  assert.equal(afterApproval.body.device.status, "active");
+});
+
+test("same pending device can retry enrollment but a different key cannot replace it", async () => {
+  const storage = new MemoryStorage();
+  const store = new AuthDeviceStore({ storage });
+  const device = { publicKey: "public-key-A", status: "pending", createdAt: Date.now(), keyVersion: 1 };
+  await store.fetch(request("/register", { device }));
+  const retry = await read(await store.fetch(request("/register", { device })));
+  const replacement = await read(await store.fetch(request("/register", {
+    device: { ...device, publicKey: "public-key-B" }
+  })));
+  assert.equal(retry.body.ok, true);
+  assert.equal(retry.body.status, "pending");
+  assert.equal(replacement.status, 409);
+});
+
+test("admin approval endpoint requires the admin secret and limiter", async () => {
+  let approved = false;
+  const allow = { limit: async () => ({ success: true }) };
+  const namespace = {
+    idFromName: id => id,
+    get: () => ({
+      fetch: async request => {
+        assert.equal(new URL(request.url).pathname, "/approve");
+        approved = true;
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+    })
+  };
+  const env = { DEVICE_ADMIN_SECRET: "A".repeat(48), AUTH_DEVICES: namespace, ADMIN_LIMITER: allow };
+  const unauthorized = await worker.fetch(request("/v1/admin/devices/approve", { installId }), env);
+  assert.equal(unauthorized.status, 404);
+  assert.equal(approved, false);
+  const authorized = await worker.fetch(new Request("https://unit.test/v1/admin/devices/approve", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: "Bearer " + env.DEVICE_ADMIN_SECRET },
+    body: JSON.stringify({ installId })
+  }), env);
+  assert.equal(authorized.status, 200);
+  assert.equal((await authorized.json()).approved, true);
+  assert.equal(approved, true);
+});
