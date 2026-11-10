@@ -111,8 +111,12 @@ export default {
 
     // This temporary gate is not suitable for a token embedded in a public APK.
     // Keep the endpoint private until per-device enrollment is implemented.
-    if (!env.APP_ACCESS_TOKEN || !env.GROQ_API_KEY) {
-      return json({ error: "server_not_configured" }, 503);
+    const missingSecrets = [];
+    if (!env.APP_ACCESS_TOKEN) missingSecrets.push("APP_ACCESS_TOKEN");
+    if (!env.GROQ_API_KEY) missingSecrets.push("GROQ_API_KEY");
+    if (missingSecrets.length) {
+      // Names only: never return or log secret values.
+      return json({ error: "server_not_configured", missing: missingSecrets }, 503);
     }
     const auth = request.headers.get("authorization") || "";
     if (auth !== `Bearer ${env.APP_ACCESS_TOKEN}`) {
