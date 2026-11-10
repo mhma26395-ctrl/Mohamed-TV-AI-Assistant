@@ -105,10 +105,10 @@ test("challenge alarm removes stored challenge", async () => {
 test("device registration is first-write-wins and revocation is persistent", async () => {
   const storage = new MemoryStorage();
   const store = new AuthDeviceStore({ storage });
-  const first = await read(await store.fetch(request("/register", { device: { publicKey: "A".repeat(100), status: "pending" } })));
-  const second = await read(await store.fetch(request("/register", { device: { publicKey: "B".repeat(100), status: "pending" } })));
+  const first = await read(await store.fetch(request("/register", { device: { publicKey: "A".repeat(100), status: "active" } })));
+  const second = await read(await store.fetch(request("/register", { device: { publicKey: "B".repeat(100), status: "active" } })));
   assert.equal(first.body.ok, true);
-  assert.equal(first.body.status, "pending");
+  assert.equal(first.body.status, "active");
   assert.equal(second.status, 409);
   assert.equal((await read(await store.fetch(request("/revoke", {})))).body.ok, true);
   const current = await read(await store.fetch(request("/get", {})));
@@ -118,7 +118,7 @@ test("device registration is first-write-wins and revocation is persistent", asy
 test("device registration rejects malformed records", async () => {
   const storage = new MemoryStorage();
   const store = new AuthDeviceStore({ storage });
-  const result = await read(await store.fetch(request("/register", { device: { publicKey: "", status: "pending" } })));
+  const result = await read(await store.fetch(request("/register", { device: { publicKey: "", status: "active" } })));
   assert.equal(result.status, 409);
   assert.equal(result.body.ok, false);
 });
@@ -140,8 +140,8 @@ test("concurrent device registration cannot replace the first key", async () => 
   const storage = new MemoryStorage();
   const store = new AuthDeviceStore({ storage });
   const results = await Promise.all([
-    store.fetch(request("/register", { device: { publicKey: "A".repeat(100), status: "pending" } })).then(read),
-    store.fetch(request("/register", { device: { publicKey: "B".repeat(100), status: "pending" } })).then(read)
+    store.fetch(request("/register", { device: { publicKey: "A".repeat(100), status: "active" } })).then(read),
+    store.fetch(request("/register", { device: { publicKey: "B".repeat(100), status: "active" } })).then(read)
   ]);
   assert.equal(results.filter(result => result.body.ok).length, 1);
   assert.equal(results.filter(result => result.status === 409).length, 1);
@@ -408,9 +408,8 @@ test("admin approval endpoint requires the admin secret and limiter", async () =
 test("revoked devices cannot be re-approved", async () => {
   const storage = new MemoryStorage();
   const store = new AuthDeviceStore({ storage });
-  const device = { publicKey: "A".repeat(100), status: "pending", createdAt: Date.now(), keyVersion: 1 };
+  const device = { publicKey: "A".repeat(100), status: "active", createdAt: Date.now(), keyVersion: 1 };
   await store.fetch(request("/register", { device }));
-  await store.fetch(request("/approve", {}));
   await store.fetch(request("/revoke", {}));
   const reapproval = await read(await store.fetch(request("/approve", {})));
   assert.equal(reapproval.status, 404);
