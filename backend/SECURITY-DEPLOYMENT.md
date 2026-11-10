@@ -8,7 +8,7 @@ Configure these in the Cloudflare Worker environment (Production and Preview sep
 
 | Binding | Type | Purpose |
 |---|---|---|
-| `DEVICE_REGISTRY` | KV namespace | Device public-key records and one-time challenges |
+| `DEVICE_REGISTRY` | KV namespace | Device public-key records and status |\n| `AUTH_CHALLENGES` | Durable Object namespace bound to exported class `AuthChallengeStore` | Atomic, single-use 120-second challenges |
 | `ENROLL_LIMITER` | Rate limiting binding | Per-IP and global throttling for enrollment/challenge/session issuance |
 | `RATE_LIMITER` | Rate limiting binding | Per-IP API throttling |
 | `DEVICE_RATE_LIMITER` | Rate limiting binding | Per-installation API throttling |
@@ -30,7 +30,7 @@ Never put any of these values in GitHub, app resources, Gradle files, logs, or t
 3. For first enrollment, the app signs `enroll|<installId>|<nonce>`; the Worker verifies the signature and stores only the public key and status.
 4. For each new API session, the app requests a fresh challenge and signs `session|<installId>|<nonce>`.
 5. The Worker issues a 10-minute HMAC-SHA256 JWT. Every assistant/info request verifies its signature, expiry, audience, and current device status in KV, then applies per-device and per-IP rate limits.
-6. Challenges are deleted after use and expire automatically after 120 seconds.
+6. Challenges are consumed atomically by a Durable Object transaction, deleted after use, and expire automatically after 120 seconds. This avoids the read/delete race that a KV-only challenge store would have.
 
 ## Revocation
 
@@ -42,7 +42,7 @@ To revoke an installation, update its KV value at key `device:<installId>` so `s
 - IP/global rate limits and per-device quotas reduce abuse but do not establish app authenticity. Review Cloudflare Turnstile/attestation options compatible with Android TV before claiming stronger anti-abuse guarantees.
 - A random installation UUID is an identifier, not a credential. Device key cloning is harder when the private key is hardware-backed, but hardware-backed storage is not guaranteed on every TV.
 - Android Keystore implementations vary. The app must report key-generation/authentication failure rather than silently fall back to a plain-text or APK-embedded secret.
-- KV is eventually consistent. If immediate revocation is a hard requirement, migrate the device registry/session revocation check to a strongly consistent Durable Object.
+- The device registry currently uses KV, which is eventually consistent. Revocation may therefore take time to propagate. If immediate revocation is a hard requirement, migrate the device registry/session revocation check to a strongly consistent Durable Object.
 - This protocol is not yet independently penetration-tested. Do not publish or describe it as fully secure until replay, key rotation, revocation, concurrency, rate-limit and physical-device tests pass.
 
 ## Deployment gate
