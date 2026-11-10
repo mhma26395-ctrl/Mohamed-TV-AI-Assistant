@@ -22,9 +22,13 @@ The required Wrangler Durable Object declarations and migration are already pres
 name = "AUTH_CHALLENGES"
 class_name = "AuthChallengeStore"
 
+[[durable_objects.bindings]]
+name = "AUTH_DEVICES"
+class_name = "AuthDeviceStore"
+
 [[migrations]]
-tag = "auth-challenges-v1"
-new_sqlite_classes = ["AuthChallengeStore"]
+tag = "auth-v1"
+new_sqlite_classes = ["AuthChallengeStore", "AuthDeviceStore"]
 ```
 
 Both classes are exported from `backend/worker.js`. Configure the three rate-limit bindings listed above in the Cloudflare dashboard; never commit secret values.
