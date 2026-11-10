@@ -361,3 +361,34 @@ test("admin approval endpoint requires the admin secret and limiter", async () =
   assert.equal((await authorized.json()).approved, true);
   assert.equal(approved, true);
 });
+
+
+test("revoked devices cannot be re-approved", async () => {
+  const storage = new MemoryStorage();
+  const store = new AuthDeviceStore({ storage });
+  const device = { publicKey: "A".repeat(100), status: "pending", createdAt: Date.now(), keyVersion: 1 };
+  await store.fetch(request("/register", { device }));
+  await store.fetch(request("/approve", {}));
+  await store.fetch(request("/revoke", {}));
+  const reapproval = await read(await store.fetch(request("/approve", {})));
+  assert.equal(reapproval.status, 404);
+  assert.equal(reapproval.body.ok, false);
+  const current = await read(await store.fetch(request("/get", {})));
+  assert.equal(current.body.device.status, "revoked");
+});
+
+test("pending devices cannot request a session challenge", async () => {
+  const allow = { limit: async () => ({ success: true }) };
+  const env = {
+    AUTH_DEVICES: makeDeviceNamespace("pending"),
+    AUTH_CHALLENGES: { idFromName: id => id, get: () => ({ fetch: async () => new Response(JSON.stringify({ ok: true })) }) },
+    SESSION_SIGNING_SECRET: "S".repeat(48),
+    ENROLL_LIMITER: allow,
+    RATE_LIMITER: allow
+  };
+  const response = await worker.fetch(request("/v1/auth/challenge", {
+    installId, purpose: "session"
+  }), env);
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).error, "authentication_failed");
+});
