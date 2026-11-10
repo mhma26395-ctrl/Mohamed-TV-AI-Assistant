@@ -57,11 +57,11 @@ import java.util.Locale;
 
 /** TV-first assistant. Version 0.2.0 adds normalized Arabic/English command aliases. */
 public class MainActivity extends Activity {
-    private TextView status, transcript, response;
+    protected TextView status, transcript, response;
     private SpeechRecognizer recognizer;
     private TextToSpeech tts;
     private boolean ttsReady = false;
-    private String speechLanguage = "ar-EG";
+    protected String speechLanguage = "ar-EG";
     private Button micButton;
     private EditText tokenInput, messageInput;
     private final ExecutorService network = Executors.newSingleThreadExecutor();
@@ -72,7 +72,7 @@ public class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         buildUi();
         if (getIntent() != null && getIntent().getBooleanExtra("start_voice", false)) new Handler(Looper.getMainLooper()).postDelayed(() -> startListening(), 700);
-        tokenInput.setText(getPreferences(MODE_PRIVATE).getString("access_token", ""));
+        tokenInput.setText(getSharedPreferences("assistant_settings", MODE_PRIVATE).getString("access_token", ""));
         tts = new TextToSpeech(this, result -> {
             if (result == TextToSpeech.SUCCESS) { ttsReady = true; tts.setLanguage(new Locale("ar")); }
         });
@@ -80,7 +80,7 @@ public class MainActivity extends Activity {
         requestMicPermission();
     }
 
-    private void buildUi() {
+    protected void buildUi() {
         ScrollView scroll = new ScrollView(this);
         scroll.setFocusable(false);
         LinearLayout root = new LinearLayout(this);
@@ -231,7 +231,7 @@ public class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 7);
     }
 
-    private void startListening() {
+    protected void startListening() {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestMicPermission(); setStatus("Microphone permission required / نحتاج إذن الميكروفون"); return;
         }
@@ -343,7 +343,7 @@ public class MainActivity extends Activity {
     }
 
 
-    private void sendToAi(String message) {
+    protected void sendToAi(String message) {
         String token = getPreferences(MODE_PRIVATE).getString("access_token", "").trim();
         if (token.isEmpty()) { reply("احفظ Access Token أولاً من خانة الاتصال."); return; }
         setStatus("Preparing request… / تجهيز الطلب…");
@@ -761,9 +761,9 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void setStatus(String s) { if (status != null) status.setText(s); }
+    protected void setStatus(String s) { if (status != null) status.setText(s); }
 
-    private void reply(String s) {
+    protected void reply(String s) {
         response.setText("Assistant / المساعد: " + s);
         setStatus("Ready · جاهز");
         if (ttsReady) {
