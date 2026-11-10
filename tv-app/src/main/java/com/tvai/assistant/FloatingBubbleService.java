@@ -80,10 +80,11 @@ public class FloatingBubbleService extends Service {
                     openAssistant();
                     return true;
                 case KeyEvent.KEYCODE_BACK:
-                    // Keep the bubble available; BACK is handled by the opened assistant window.
-                    return true;
+                    // Do not trap BACK; let the system or foreground window handle it.
+                    return false;
                 default:
-                    return true;
+                    // Preserve unrelated remote keys for the focused app/system.
+                    return false;
             }
         });
 
