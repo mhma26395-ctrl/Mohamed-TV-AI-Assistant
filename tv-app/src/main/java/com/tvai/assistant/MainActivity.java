@@ -338,11 +338,12 @@ public class MainActivity extends Activity {
                 JSONObject payload = new JSONObject();
                 JSONArray installedApps = getInstalledLaunchableAppsJson();
                 StringBuilder appContext = new StringBuilder("\\n\\nACTUAL_INSTALLED_APPS_ON_THIS_TV. Use only exact packageName values below for launch_app; never guess package names. If the requested app is not listed, say so.\\n");
+                int contextLimit = Math.max(0, 3800 - message.length());
                 for (int i = 0; i < installedApps.length() && i < 80; i++) {
                     JSONObject app = installedApps.optJSONObject(i);
                     if (app == null) continue;
                     String line = app.optString("name") + " | " + app.optString("packageName") + "\\n";
-                    if (appContext.length() + line.length() > 2600) break;
+                    if (appContext.length() + line.length() > contextLimit) break;
                     appContext.append(line);
                 }
                 payload.put("message", message + appContext.toString());
