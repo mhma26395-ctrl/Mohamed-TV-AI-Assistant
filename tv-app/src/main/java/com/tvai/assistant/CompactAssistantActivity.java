@@ -7,7 +7,6 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -38,14 +37,10 @@ public class CompactAssistantActivity extends MainActivity {
         status.setPadding(4, 8, 4, 8);
         panel.addView(status);
 
-        // MainActivity initializes these views after buildUi returns.
-        tokenInput = new EditText(this);
-        tokenInput.setVisibility(View.GONE);
-        panel.addView(tokenInput);
+        // Keep transcript available to the shared speech-recognition flow without showing it.
         transcript = new TextView(this);
         transcript.setVisibility(View.GONE);
         panel.addView(transcript);
-
         response = new TextView(this);
         response.setText("تحدث لإعطاء أمر للتلفزيون");
         response.setTextColor(Color.WHITE);
