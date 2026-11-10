@@ -265,7 +265,7 @@ export default {
     // Keep the endpoint private until per-device enrollment is implemented.
     const missingSecrets = [];
     if (!env.APP_ACCESS_TOKEN) missingSecrets.push("APP_ACCESS_TOKEN");
-    if (!env.GROQ_API_KEY) missingSecrets.push("GROQ_API_KEY");
+    if (url.pathname === "/v1/assistant" && !env.GROQ_API_KEY) missingSecrets.push("GROQ_API_KEY");
     if (missingSecrets.length) {
       // Names only: never return or log secret values.
       return json({ error: "server_not_configured", missing: missingSecrets }, 503);
@@ -277,11 +277,10 @@ export default {
 
     let body;
     try { body = await request.json(); } catch { return json({ error: "invalid_json" }, 400); }
-    if (!validRequest(body)) return json({ error: "invalid_request", maxMessageLength: 4000 }, 400);
+    if (url.pathname === "/v1/assistant" && !validRequest(body)) return json({ error: "invalid_request", maxMessageLength: 4000 }, 400);
 
     if (url.pathname === "/v1/info") {
-      let infoBody;
-      try { infoBody = await request.json(); } catch { return json({ error: "invalid_json" }, 400); }
+      const infoBody = body;
       if (!infoBody || !["time", "weather"].includes(infoBody.type) || typeof infoBody.location !== "string" || !infoBody.location.trim() || infoBody.location.length > 100) {
         return json({ error: "invalid_info_request" }, 400);
       }
