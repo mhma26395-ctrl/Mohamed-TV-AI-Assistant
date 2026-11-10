@@ -337,34 +337,44 @@ test("device revocation endpoint fails closed without its admin limiter", async 
 });
 
 
-test("new devices remain pending until an administrator approves them", async () => {
+test("new devices activate automatically after verified enrollment", async () => {
   const storage = new MemoryStorage();
   const store = new AuthDeviceStore({ storage });
   const registration = await read(await store.fetch(request("/register", {
-    device: { publicKey: "A".repeat(100), status: "pending", createdAt: Date.now(), keyVersion: 1 }
+    device: { publicKey: "A".repeat(100), status: "active", createdAt: Date.now(), keyVersion: 1 }
   })));
   assert.equal(registration.body.ok, true);
-  assert.equal(registration.body.status, "pending");
-  const beforeApproval = await read(await store.fetch(request("/get", {})));
-  assert.equal(beforeApproval.body.device.status, "pending");
-  const approved = await read(await store.fetch(request("/approve", {})));
-  assert.equal(approved.body.ok, true);
-  const afterApproval = await read(await store.fetch(request("/get", {})));
-  assert.equal(afterApproval.body.device.status, "active");
+  assert.equal(registration.body.status, "active");
+  const saved = await read(await store.fetch(request("/get", {})));
+  assert.equal(saved.body.device.status, "active");
 });
 
-test("same pending device can retry enrollment but a different key cannot replace it", async () => {
+test("same pending device auto-activates on retry but a different key cannot replace it", async () => {
   const storage = new MemoryStorage();
   const store = new AuthDeviceStore({ storage });
   const device = { publicKey: "A".repeat(100), status: "pending", createdAt: Date.now(), keyVersion: 1 };
   await store.fetch(request("/register", { device }));
-  const retry = await read(await store.fetch(request("/register", { device })));
+  const retry = await read(await store.fetch(request("/register", {
+    device: { ...device, status: "active" }
+  })));
   const replacement = await read(await store.fetch(request("/register", {
-    device: { ...device, publicKey: "B".repeat(100) }
+    device: { ...device, publicKey: "B".repeat(100), status: "active" }
   })));
   assert.equal(retry.body.ok, true);
-  assert.equal(retry.body.status, "pending");
+  assert.equal(retry.body.status, "active");
   assert.equal(replacement.status, 409);
+});
+
+test("revoked devices cannot auto-reactivate on enrollment retry", async () => {
+  const storage = new MemoryStorage();
+  const store = new AuthDeviceStore({ storage });
+  const device = { publicKey: "A".repeat(100), status: "active", createdAt: Date.now(), keyVersion: 1 };
+  await store.fetch(request("/register", { device }));
+  await store.fetch(request("/revoke", {}));
+  const retry = await read(await store.fetch(request("/register", { device })));
+  assert.equal(retry.body.status, "revoked");
+  const saved = await read(await store.fetch(request("/get", {})));
+  assert.equal(saved.body.device.status, "revoked");
 });
 
 test("admin approval endpoint requires the admin secret and limiter", async () => {
@@ -451,7 +461,7 @@ test("admin device actions stop when the administrator rate limit is exhausted",
 });
 
 
-test("valid first enrollment stores the verified public key as pending", async () => {
+test("valid first enrollment automatically activates the verified public key", async () => {
   const pair = await crypto.subtle.generateKey(
     { name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]
   );
@@ -479,7 +489,7 @@ test("valid first enrollment stores the verified public key as pending", async (
         const request = typeof input === "string" ? new Request(input, init) : input;
         assert.equal(new URL(request.url).pathname, "/register");
         stored = JSON.parse(init.body).device;
-        return new Response(JSON.stringify({ ok: true, status: "pending" }), { status: 200 });
+        return new Response(JSON.stringify({ ok: true, status: "active" }), { status: 200 });
       } })
     }
   };
@@ -488,10 +498,11 @@ test("valid first enrollment stores the verified public key as pending", async (
   }), env);
   assert.equal(response.status, 200);
   const body = await response.json();
-  assert.equal(body.pending, true);
-  assert.equal(body.enrolled, false);
+  assert.equal(body.pending, false);
+  assert.equal(body.enrolled, true);
+  assert.equal(body.status, "active");
   assert.equal(stored.publicKey, publicKey);
-  assert.equal(stored.status, "pending");
+  assert.equal(stored.status, "active");
 });
 
 
