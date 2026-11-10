@@ -943,8 +943,20 @@ public class MainActivity extends Activity {
         }
     }
     @Override protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent); setIntent(intent);
-        if (intent != null && intent.getBooleanExtra("start_voice", false)) new Handler(Looper.getMainLooper()).postDelayed(() -> startListening(), 500);
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent != null && "com.tvai.assistant.REMOTE_KEY_CAPTURED".equals(intent.getAction())) {
+            int keyCode = intent.getIntExtra("captured_key_code", -1);
+            String keyName = intent.getStringExtra("captured_key_name");
+            if (keyCode >= 0 && keyName != null) {
+                reply("تم رصد زر الريموت: " + keyName + " · KEYCODE " + keyCode
+                        + ". ارجع إلى تخصيص أزرار الريموت واضغط تفعيل الزر المختار.");
+            }
+            return;
+        }
+        if (intent != null && intent.getBooleanExtra("start_voice", false)) {
+            new Handler(Looper.getMainLooper()).postDelayed(() -> startListening(), 500);
+        }
     }
 
     private boolean hasUsageAccess() {
@@ -1152,6 +1164,20 @@ public class MainActivity extends Activity {
     }
 
     @Override public boolean onKeyDown(int keyCode, KeyEvent event) {
+        android.content.SharedPreferences probe = getSharedPreferences("remote_key_probe", MODE_PRIVATE);
+        if (probe.getBoolean("capture_armed", false) && !isProtectedRemoteSystemKey(keyCode)) {
+            String keyName = KeyEvent.keyCodeToString(keyCode);
+            probe.edit().putInt("captured_key_code", keyCode)
+                    .putString("captured_key_name", keyName)
+                    .putBoolean("capture_armed", false)
+                    .putBoolean("capture_notice_pending", false)
+                    .putInt("last_key_code", keyCode)
+                    .putString("last_key_name", keyName)
+                    .apply();
+            reply("تم رصد زر الريموت: " + keyName + " · KEYCODE " + keyCode
+                    + ". ارجع إلى تخصيص أزرار الريموت واضغط تفعيل الزر المختار.");
+            return true;
+        }
         if (keyCode == KeyEvent.KEYCODE_MENU) { startListening(); return true; }
         return super.onKeyDown(keyCode,event);
     }
