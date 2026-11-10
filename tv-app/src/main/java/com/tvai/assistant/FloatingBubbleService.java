@@ -1,6 +1,9 @@
 package com.tvai.assistant;
 
 import android.app.Service;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
@@ -23,6 +26,7 @@ public class FloatingBubbleService extends Service {
 
     @Override public void onCreate() {
         super.onCreate();
+        startAssistantForeground();
         windowManager = (WindowManager)getSystemService(WINDOW_SERVICE);
         bubble = new TextView(this);
         bubble.setText("AI");
@@ -57,6 +61,19 @@ public class FloatingBubbleService extends Service {
             return true;
         });
         try { windowManager.addView(bubble, params); } catch (Exception e) { stopSelf(); }
+    }
+
+    private void startAssistantForeground() {
+        String channelId = "tvai_floating_assistant";
+        if (Build.VERSION.SDK_INT >= 26) {
+            NotificationChannel channel = new NotificationChannel(channelId, "TV AI Assistant", NotificationManager.IMPORTANCE_LOW);
+            NotificationManager manager = (NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+            if (manager != null) manager.createNotificationChannel(channel);
+        }
+        Notification notification = Build.VERSION.SDK_INT >= 26
+            ? new Notification.Builder(this, channelId).setSmallIcon(android.R.drawable.ic_btn_speak_now).setContentTitle("Mohamed TV AI Assistant").setContentText("الزر العائم للمساعد الصوتي يعمل").setOngoing(true).build()
+            : new Notification.Builder(this).setSmallIcon(android.R.drawable.ic_btn_speak_now).setContentTitle("Mohamed TV AI Assistant").setOngoing(true).build();
+        startForeground(4102, notification);
     }
 
     private void openAssistant() {
