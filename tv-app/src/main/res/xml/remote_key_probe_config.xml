@@ -3,6 +3,6 @@
     android:accessibilityEventTypes="typeWindowStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canRetrieveWindowContent="false"
-    android:canRequestFilterKeyEvents="false"
+    android:canRequestFilterKeyEvents="true"
     android:notificationTimeout="250"
     android:description="@string/remote_key_probe_description" />
