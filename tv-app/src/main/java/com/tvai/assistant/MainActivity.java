@@ -530,8 +530,43 @@ public class MainActivity extends Activity {
         return true;
     }
 
+    private boolean tryHandleLocalAudioCommand(String normalized) {
+        AudioManager audio = (AudioManager)getSystemService(AUDIO_SERVICE);
+        if (audio == null) {
+            reply("تعذر الوصول إلى التحكم في الصوت على هذا التلفزيون.");
+            return true;
+        }
+        try {
+            if (has(normalized, "اكتم الصوت", "كتم الصوت", "اجعل الصوت صامت", "صامت", "mute", "silence")) {
+                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, AudioManager.FLAG_SHOW_UI);
+                reply("تم إرسال أمر كتم الصوت إلى نظام التلفزيون.");
+                return true;
+            }
+            if (has(normalized, "الغاء كتم الصوت", "الغاء الصامت", "شغل الصوت", "افتح الصوت", "unmute")) {
+                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, AudioManager.FLAG_SHOW_UI);
+                reply("تم إرسال أمر إلغاء كتم الصوت إلى نظام التلفزيون.");
+                return true;
+            }
+            if (has(normalized, "ارفع الصوت", "علي الصوت", "زود الصوت", "اعلي الصوت", "volume up", "increase volume")) {
+                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI);
+                reply("تم إرسال أمر رفع الصوت إلى نظام التلفزيون.");
+                return true;
+            }
+            if (has(normalized, "اخفض الصوت", "وطي الصوت", "خفض الصوت", "قلل الصوت", "volume down", "decrease volume", "lower volume")) {
+                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI);
+                reply("تم إرسال أمر خفض الصوت إلى نظام التلفزيون.");
+                return true;
+            }
+        } catch (Exception e) {
+            reply("نظام التلفزيون لم يسمح بتغيير مستوى الصوت من التطبيق.");
+            return true;
+        }
+        return false;
+    }
+
     protected void sendToAi(String message) {
         String normalizedRequest = normalize(message);
+        if (tryHandleLocalAudioCommand(normalizedRequest)) return;
         if (tryHandleSleepTimerRequest(message, normalizedRequest)) return;
         if (tryHandleLiveInfo(message, normalizedRequest)) return;
         if (tryHandleYouTubeSearch(message, normalizedRequest)) return;
