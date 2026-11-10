@@ -65,6 +65,7 @@ public class MainActivity extends Activity {
     private boolean ttsReady = false;
     protected String speechLanguage = "ar-EG";
     private Button micButton;
+    private Button ttsToggleButton;
     private EditText messageInput;
     private final ExecutorService network = Executors.newSingleThreadExecutor();
     private static final String API_URL = BuildConfig.BACKEND_BASE_URL + "/v1/assistant";
@@ -127,6 +128,12 @@ public class MainActivity extends Activity {
         status = label("Ready · جاهز للاستماع");
         root.addView(status);
 
+        transcript = label("You said / قلت: —");
+        root.addView(transcript);
+        response = label("ستظهر إجابات المساعد هنا في أعلى الشاشة. / Assistant answers will appear here.");
+        response.setBackgroundColor(Color.rgb(15,48,78));
+        root.addView(response);
+
         TextView secureConnection = label("Secure device connection · اتصال آمن تلقائيًا");
         secureConnection.setTextColor(Color.LTGRAY);
         secureConnection.setTextSize(14);
@@ -153,6 +160,20 @@ public class MainActivity extends Activity {
         micButton.setOnClickListener(v -> startListening());
         root.addView(micButton);
 
+        ttsToggleButton = button("");
+        updateTtsToggleLabel();
+        ttsToggleButton.setOnClickListener(v -> {
+            boolean enabled = getSharedPreferences("assistant_settings", MODE_PRIVATE)
+                    .getBoolean("tts_enabled", false);
+            getSharedPreferences("assistant_settings", MODE_PRIVATE).edit()
+                    .putBoolean("tts_enabled", !enabled).apply();
+            if (tts != null && enabled) tts.stop();
+            updateTtsToggleLabel();
+            setStatus(!enabled ? "Voice replies enabled / تم تفعيل الرد الصوتي" :
+                    "Voice replies disabled / تم إيقاف الرد الصوتي");
+        });
+        root.addView(ttsToggleButton);
+
         Button lang = button("Language: العربية / English");
         lang.setOnClickListener(v -> {
             speechLanguage = speechLanguage.equals("ar-EG") ? "en-US" : "ar-EG";
@@ -174,14 +195,22 @@ public class MainActivity extends Activity {
         usage.setOnClickListener(v -> { if (hasUsageAccess()) reply("إذن Usage Access مفعّل بالفعل."); else openUsageAccessSettings(); });
         root.addView(usage);
 
-        transcript = label("You said / قلت: —");
-        root.addView(transcript);
-        response = label("اكتب طلبك أو اضغط زر الميكروفون وتحدث بطريقتك الطبيعية. / Type your request or use the microphone.");
-        root.addView(response);
-        TextView foot = label("Version 0.6.2 · Remote key mapping requires Accessibility permission. Overlay requires separate permission. No root access is used.");
+        TextView foot = label("Version 0.6.3 · Voice replies can be toggled. Remote key mapping needs supported Accessibility key filtering.");
         foot.setTextSize(13);
         root.addView(foot);
+        /* Results are intentionally placed above the input and voice controls. */
+        /* Version footer follows the controls. */
+        /*
         if (micButton != null) micButton.requestFocus();
+    }
+
+    private void updateTtsToggleLabel() {
+        if (ttsToggleButton == null) return;
+        boolean enabled = getSharedPreferences("assistant_settings", MODE_PRIVATE)
+                .getBoolean("tts_enabled", false);
+        ttsToggleButton.setText(enabled
+                ? "🔊 إيقاف قراءة الإجابات صوتيًا / Mute replies"
+                : "🔇 تفعيل قراءة الإجابات صوتيًا / Enable voice replies");
     }
 
     private TextView label(String text) {
@@ -1253,8 +1282,10 @@ public class MainActivity extends Activity {
         response.setGravity(arabic ? Gravity.RIGHT : Gravity.LEFT);
         response.setTextAlignment(View.TEXT_ALIGNMENT_GRAVITY);
         setStatus("Ready · جاهز");
-        if (ttsReady) {
-            Locale l = s.matches(".*[\\u0600-\\u06FF].*") ? new Locale("ar") : Locale.US;
+        boolean voiceReplies = getSharedPreferences("assistant_settings", MODE_PRIVATE)
+                .getBoolean("tts_enabled", false);
+        if (ttsReady && voiceReplies) {
+            Locale l = clean.matches("(?s).*?[\\u0600-\\u06FF].*") ? new Locale("ar") : Locale.US;
             tts.setLanguage(l);
             tts.speak(clean, TextToSpeech.QUEUE_FLUSH, null, "tvai-reply");
         }
