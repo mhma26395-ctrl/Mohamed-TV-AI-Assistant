@@ -310,29 +310,141 @@ function safeToolCalls(message) {
   });
 }
 
+
+const b64u = (bytes) => {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/=/g, "").replace(/\\+/g, "-").replace(/\\//g, "_");
+};
+const unb64u = (value) => {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4);
+  return Uint8Array.from(atob(padded), c => c.charCodeAt(0));
+};
+const utf8 = (value) => new TextEncoder().encode(value);
+const randomToken = (length = 32) => {
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  return b64u(bytes);
+};
+async function verifyDeviceSignature(publicKeySpki, signatureDer, message) {
+  try {
+    const key = await crypto.subtle.importKey("spki", unb64u(publicKeySpki), { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+    const der = unb64u(signatureDer);
+    // Android SHA256withECDSA emits ASN.1 DER; WebCrypto ECDSA expects fixed-width r||s.
+    if (der.length < 8 || der[0] !== 0x30) return false;
+    let offset = 2;
+    if (der[1] & 0x80) offset = 2 + (der[1] & 0x7f);
+    if (der[offset++] !== 0x02) return false;
+    const rLen = der[offset++]; let r = der.slice(offset, offset + rLen); offset += rLen;
+    if (der[offset++] !== 0x02) return false;
+    const sLen = der[offset++]; let ss = der.slice(offset, offset + sLen);
+    while (r.length > 32 && r[0] === 0) r = r.slice(1);
+    while (ss.length > 32 && ss[0] === 0) ss = ss.slice(1);
+    if (r.length > 32 || ss.length > 32) return false;
+    const raw = new Uint8Array(64); raw.set(r, 32-r.length); raw.set(ss, 64-ss.length);
+    return await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, key, raw, utf8(message));
+  } catch { return false; }
+}
+async function signSession(payload, secret) {
+  const key = await crypto.subtle.importKey("raw", utf8(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const head = b64u(utf8(JSON.stringify({ alg: "HS256", typ: "JWT" })));
+  const body = b64u(utf8(JSON.stringify(payload)));
+  const input = head + "." + body;
+  const sig = await crypto.subtle.sign("HMAC", key, utf8(input));
+  return input + "." + b64u(new Uint8Array(sig));
+}
+async function verifySession(token, secret, registry) {
+  try {
+    const parts = String(token || "").split(".");
+    if (parts.length !== 3) return null;
+    const key = await crypto.subtle.importKey("raw", utf8(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+    if (!await crypto.subtle.verify("HMAC", key, unb64u(parts[2]), utf8(parts[0] + "." + parts[1]))) return null;
+    const claims = JSON.parse(new TextDecoder().decode(unb64u(parts[1])));
+    const now = Math.floor(Date.now()/1000);
+    if (claims.iss !== "mohamed-tv-ai" || claims.aud !== "tv-app" || !claims.sub || !Number.isInteger(claims.exp) || claims.exp <= now || claims.exp > now + 901) return null;
+    const record = await registry.get("device:" + claims.sub, "json");
+    if (!record || record.status !== "active") return null;
+    return claims;
+  } catch { return null; }
+}
+async function rateLimit(binding, key) {
+  if (!binding) return false;
+  const result = await binding.limit({ key });
+  return !!result.success;
+}
+async function authRoutes(request, env, url) {
+  const registry = env.DEVICE_REGISTRY;
+  const secret = env.SESSION_SIGNING_SECRET;
+  if (!registry || !secret || secret.length < 32 || !env.ENROLL_LIMITER || !env.RATE_LIMITER) {
+    return json({ error: "auth_service_unavailable" }, 503);
+  }
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  if (url.pathname === "/v1/auth/challenge") {
+    if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+    if (!await rateLimit(env.ENROLL_LIMITER, "challenge:" + ip)) return json({ error: "rate_limited" }, 429);
+    let body; try { body = await request.json(); } catch { return json({ error: "invalid_request" }, 400); }
+    const id = String(body.installId || "");
+    const purpose = String(body.purpose || "");
+    if (!/^[0-9a-f-]{36}$/i.test(id) || !["enroll", "session"].includes(purpose)) return json({ error: "invalid_request" }, 400);
+    if (purpose === "session") {
+      const record = await registry.get("device:" + id, "json");
+      if (!record || record.status !== "active") return json({ error: "authentication_failed" }, 401);
+    }
+    const nonce = randomToken(32);
+    await registry.put("challenge:" + nonce, JSON.stringify({ installId: id, purpose, createdAt: Date.now() }), { expirationTtl: 120 });
+    return json({ ok: true, nonce, expiresIn: 120 });
+  }
+  if (url.pathname === "/v1/auth/enroll") {
+    if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+    if (!await rateLimit(env.ENROLL_LIMITER, "enroll:" + ip)) return json({ error: "rate_limited" }, 429);
+    let body; try { body = await request.json(); } catch { return json({ error: "invalid_request" }, 400); }
+    const id = String(body.installId || ""), nonce = String(body.nonce || ""), pub = String(body.publicKey || ""), sig = String(body.signature || "");
+    if (!/^[0-9a-f-]{36}$/i.test(id) || nonce.length < 30 || pub.length > 1000 || sig.length > 300) return json({ error: "invalid_request" }, 400);
+    const challenge = await registry.get("challenge:" + nonce, "json");
+    if (!challenge || challenge.installId !== id || challenge.purpose !== "enroll") return json({ error: "authentication_failed" }, 401);
+    await registry.delete("challenge:" + nonce);
+    if (!await verifyDeviceSignature(pub, sig, "enroll|" + id + "|" + nonce)) return json({ error: "authentication_failed" }, 401);
+    const existing = await registry.get("device:" + id, "json");
+    if (existing) return json({ error: "enrollment_not_available" }, 409);
+    const device = { publicKey: pub, status: "active", createdAt: Date.now(), keyVersion: 1 };
+    await registry.put("device:" + id, JSON.stringify(device));
+    return json({ ok: true, enrolled: true });
+  }
+  if (url.pathname === "/v1/auth/session") {
+    if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+    if (!await rateLimit(env.ENROLL_LIMITER, "session:" + ip)) return json({ error: "rate_limited" }, 429);
+    let body; try { body = await request.json(); } catch { return json({ error: "invalid_request" }, 400); }
+    const id = String(body.installId || ""), nonce = String(body.nonce || ""), sig = String(body.signature || "");
+    const challenge = await registry.get("challenge:" + nonce, "json");
+    const device = await registry.get("device:" + id, "json");
+    if (!challenge || challenge.installId !== id || challenge.purpose !== "session" || !device || device.status !== "active") return json({ error: "authentication_failed" }, 401);
+    await registry.delete("challenge:" + nonce);
+    if (!await verifyDeviceSignature(device.publicKey, sig, "session|" + id + "|" + nonce)) return json({ error: "authentication_failed" }, 401);
+    const now = Math.floor(Date.now()/1000);
+    const token = await signSession({ iss: "mohamed-tv-ai", aud: "tv-app", sub: id, iat: now, exp: now + 600 }, secret);
+    return json({ ok: true, token, expiresIn: 600 });
+  }
+  return json({ error: "not_found" }, 404);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/v1/health") {
       return json({ ok: true, service: "mohamed-tv-ai", apiVersion: 1, provider: "groq" });
     }
+    if (url.pathname.startsWith("/v1/auth/")) return authRoutes(request, env, url);
     if (request.method !== "POST" || !["/v1/assistant", "/v1/info"].includes(url.pathname)) {
       return json({ error: "not_found" }, 404);
     }
-
-    // This temporary gate is not suitable for a token embedded in a public APK.
-    // Keep the endpoint private until per-device enrollment is implemented.
-    const missingSecrets = [];
-    if (!env.APP_ACCESS_TOKEN) missingSecrets.push("APP_ACCESS_TOKEN");
-    if (url.pathname === "/v1/assistant" && !env.GROQ_API_KEY) missingSecrets.push("GROQ_API_KEY");
-    if (missingSecrets.length) {
-      // Names only: never return or log secret values.
-      return json({ error: "server_not_configured", missing: missingSecrets }, 503);
+    if (!env.DEVICE_REGISTRY || !env.SESSION_SIGNING_SECRET || env.SESSION_SIGNING_SECRET.length < 32 || !env.RATE_LIMITER || !env.DEVICE_RATE_LIMITER) {
+      return json({ error: "server_not_configured" }, 503);
     }
     const auth = request.headers.get("authorization") || "";
-    if (auth !== `Bearer ${env.APP_ACCESS_TOKEN}`) {
-      return json({ error: "unauthorized" }, 401);
-    }
+    const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+    const claims = await verifySession(token, env.SESSION_SIGNING_SECRET, env.DEVICE_REGISTRY);
+    if (!claims) return json({ error: "authentication_failed" }, 401);
+    if (!await rateLimit(env.DEVICE_RATE_LIMITER, "device:" + claims.sub)) return json({ error: "rate_limited" }, 429);
+    if (!await rateLimit(env.RATE_LIMITER, "ip:" + (request.headers.get("cf-connecting-ip") || "unknown"))) return json({ error: "rate_limited" }, 429);
 
     let body;
     try { body = await request.json(); } catch { return json({ error: "invalid_json" }, 400); }
