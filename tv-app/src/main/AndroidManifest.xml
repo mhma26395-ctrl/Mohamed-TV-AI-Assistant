@@ -12,8 +12,10 @@
         <package android:name="com.android.vending" />
         <package android:name="com.esaba.downloader" />
     </queries>
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <application android:allowBackup="false" android:label="Mohamed TV AI Assistant" android:theme="@style/AppTheme">
-        <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="landscape">
+        <service android:name=".FloatingBubbleService" android:exported="false" />
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:screenOrientation="landscape">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
