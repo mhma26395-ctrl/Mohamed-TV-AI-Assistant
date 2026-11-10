@@ -68,17 +68,6 @@ public class CompactAssistantActivity extends MainActivity {
         actions.addView(close, new LinearLayout.LayoutParams(0, -2, 1));
         panel.addView(actions);
 
-        Button stopBubble = new Button(this);
-        stopBubble.setText("إيقاف الزر العائم نهائياً");
-        stopBubble.setAllCaps(false);
-        stopBubble.setOnClickListener(v -> {
-            getSharedPreferences("floating_assistant", MODE_PRIVATE).edit().putBoolean("enabled", false).apply();
-            Intent stop = new Intent(this, FloatingBubbleService.class);
-            stop.setAction("com.tvai.assistant.FLOATING_STOP");
-            startService(stop);
-            finish();
-        });
-        panel.addView(stopBubble);
         setContentView(panel);
     }
 
