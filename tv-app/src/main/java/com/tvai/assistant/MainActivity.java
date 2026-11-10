@@ -163,16 +163,6 @@ public class MainActivity extends Activity {
         Button remoteSettings = button("Remote button customization / تخصيص أزرار الريموت");
         remoteSettings.setOnClickListener(v -> showRemoteButtonSettings());
         root.addView(remoteSettings);
-        Button floating = button("Floating assistant / تشغيل الزر العائم");
-        floating.setOnClickListener(v -> enableFloatingAssistant());
-        root.addView(floating);
-        Button stopFloating = button("Hide floating assistant / إخفاء الزر العائم");
-        stopFloating.setOnClickListener(v -> {
-            getSharedPreferences("floating_assistant", MODE_PRIVATE).edit().putBoolean("enabled", false).apply();
-            stopService(new Intent(this, FloatingBubbleService.class));
-            reply("تم إيقاف الزر العائم.");
-        });
-        root.addView(stopFloating);
         Button shizukuStatus = button("Shizuku / ADB capability status");
         shizukuStatus.setOnClickListener(v -> showShizukuStatus());
         root.addView(shizukuStatus);
@@ -186,20 +176,8 @@ public class MainActivity extends Activity {
 
         transcript = label("You said / قلت: —");
         root.addView(transcript);
-        response = label("جرّب: افتح يوتيوب، ابحث عن أغنية أو قناة على يوتيوب، أو افتح إعدادات VPN.");
+        response = label("اكتب طلبك أو اضغط زر الميكروفون وتحدث بطريقتك الطبيعية. / Type your request or use the microphone.");
         root.addView(response);
-        root.addView(label("Quick actions / أوامر سريعة"));
-
-        addAction(root, "Open YouTube", "open youtube");
-        addAction(root, "Open Google Play", "open play store");
-        addAction(root, "Open Settings", "open settings");
-        addAction(root, "VPN settings", "open vpn");
-        addAction(root, "Language settings", "open language settings");
-        addAction(root, "Open Downloader", "open downloader");
-        addAction(root, "Volume up", "volume up");
-        addAction(root, "Volume down", "volume down");
-        addAction(root, "Help / مساعدة", "help");
-
         TextView foot = label("Version 0.6.0 · Remote key mapping requires Accessibility permission. Overlay requires separate permission. No root access is used.");
         foot.setTextSize(13);
         root.addView(foot);
