@@ -142,5 +142,17 @@ The assistant must behave as a useful general-purpose conversational assistant a
 - Force-stopping other apps, clearing other apps' cache, and rebooting are not currently verified capabilities.
 - Floating bubble DPAD/OK handling exists in source but requires physical-device validation.
 
+## Implementation progress (source changes only; not yet released)
+- [x] Add backend live-information endpoint for current time, weather, reference USD/EGP exchange rate, indicative gold estimates, and recent news headlines.
+- [x] Add Android intent routing and response rendering for those live-information categories.
+- [x] Add general-assistant guidance for meal ideas, everyday knowledge, calculations, and safe healthy-weight explanations.
+- [ ] Deploy and verify the Cloudflare Worker endpoints against their live providers.
+- [ ] Build/lint the Android source and resolve any compile or static-analysis findings.
+- [ ] Add general web search beyond the current news feed, and broaden currency-pair parsing.
+- [ ] Add automated endpoint tests for provider timeouts, malformed results, unsupported cities/currencies, and rate limiting.
+- [ ] Test Arabic/English speech variants on physical Android TV hardware.
+- [ ] Continue implementation of Shizuku/ADB, permission center, app management, brightness/VPN, floating assistant, and remaining release items.
+- **Status caution:** checked source files are committed, but no APK has been built and no live service has been deployed or physically verified. Treat the new functionality as implementation-in-progress until those checks pass.
+
 ## Current decision
 User approved **both Shizuku and direct ADB over Wi-Fi** for the 0.7.0 consolidated release. No APK should be issued until the combined feature set and validation gates are complete.
