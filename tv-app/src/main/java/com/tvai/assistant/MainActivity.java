@@ -542,6 +542,24 @@ public class MainActivity extends Activity {
         return true;
     }
 
+    private int parseArabicVolumeNumber(String text) {
+        String[] words = {"صفر", "واحد", "واحده", "اثنين", "اتنين", "اثنان",
+                "ثلاثه", "ثلاث", "اربعه", "اربع", "خمسه", "خمس",
+                "سته", "ست", "سبعه", "سبع", "تمانيه", "ثمانيه", "ثمان",
+                "تسعه", "تسع", "عشره", "عشر", "حداشر", "احداشر",
+                "اتناشر", "اثناشر", "تلتاشر", "ثلاثتاشر", "اربعتاشر",
+                "خمستاشر", "ستاشر", "سبعتاشر", "تمانطاشر", "تمنتاشر",
+                "تسعتاشر", "عشرين"};
+        int[] values = {0,1,1,2,2,2,3,3,4,4,5,5,6,6,7,7,8,8,8,9,9,10,10,11,11,12,12,13,13,14,15,16,17,18,18,19,19,20};
+        Matcher digits = Pattern.compile("(?:الى|لحد|لغاية|الي)\\s*(\\d{1,2})").matcher(text);
+        if (digits.find()) return Integer.parseInt(digits.group(1));
+        for (int i=0;i<words.length;i++) {
+            if (text.contains("الى " + words[i]) || text.contains("لحد " + words[i])
+                    || text.contains("لغاية " + words[i]) || text.contains("الي " + words[i])) return values[i];
+        }
+        return -1;
+    }
+
     private boolean tryHandleLocalAudioCommand(String normalized) {
         AudioManager audio = (AudioManager)getSystemService(AUDIO_SERVICE);
         if (audio == null) {
@@ -549,7 +567,6 @@ public class MainActivity extends Activity {
             return true;
         }
         try {
-            // Check unmute before mute because "الغاء كتم الصوت" contains "كتم الصوت".
             if (has(normalized, "الغاء كتم الصوت", "الغاء الصامت", "شغل الصوت", "افتح الصوت", "unmute")) {
                 audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0);
                 reply("تم إرسال أمر إلغاء كتم الصوت إلى نظام التلفزيون.");
@@ -561,6 +578,14 @@ public class MainActivity extends Activity {
                 return true;
             }
 
+            boolean up = has(normalized, "ارفع الصوت", "علي الصوت", "زود الصوت", "اعلي الصوت", "volume up", "increase volume");
+            boolean down = has(normalized, "اخفض الصوت", "وطي الصوت", "خفض الصوت", "قلل الصوت", "volume down", "decrease volume", "lower volume");
+            if (!up && !down) return false;
+
+            if (audio.isVolumeFixed()) {
+                reply("هذا الجهاز يفرض مستوى صوت ثابتًا ولا يسمح للتطبيق بتغييره مباشرة.");
+                return true;
+            }
             int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
             int current = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
             if (max <= 0) {
@@ -568,12 +593,20 @@ public class MainActivity extends Activity {
                 return true;
             }
 
-            // Explicit zero/percentage requests set an exact level instead of changing one step.
             if (has(normalized, "الصوت لصفر", "الصوت الى صفر", "الصوت صفر",
                     "خفض الصوت للصفر", "خفض الصوت الى الصفر", "خفض الصوت الى صفر",
                     "volume to zero", "set volume to zero", "zero volume")) {
                 audio.setStreamVolume(AudioManager.STREAM_MUSIC, 0, AudioManager.FLAG_SHOW_UI);
                 reply("تم ضبط مستوى الصوت على صفر.");
+                return true;
+            }
+
+            int requestedTarget = parseArabicVolumeNumber(normalized);
+            if (requestedTarget >= 0) {
+                int target = Math.max(0, Math.min(max, requestedTarget));
+                audio.setStreamVolume(AudioManager.STREAM_MUSIC, target, AudioManager.FLAG_SHOW_UI);
+                int actual = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+                reply("تم ضبط مستوى الصوت على " + actual + " من " + max + ".");
                 return true;
             }
 
@@ -585,8 +618,7 @@ public class MainActivity extends Activity {
                     .replace(" بالمية", "%").replace(" في الميه", "%");
             Matcher percent = Pattern.compile("(\\d{1,3})\\s*%").matcher(numericCommand);
             if (percent.find() && has(numericCommand, "الصوت", "volume", "مستوى")) {
-                int requested = Integer.parseInt(percent.group(1));
-                if (requested > 100) requested = 100;
+                int requested = Math.min(100, Integer.parseInt(percent.group(1)));
                 int target = Math.round(max * (requested / 100.0f));
                 audio.setStreamVolume(AudioManager.STREAM_MUSIC, target, AudioManager.FLAG_SHOW_UI);
                 int actual = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
@@ -594,26 +626,13 @@ public class MainActivity extends Activity {
                 return true;
             }
 
-            if (has(normalized, "ارفع الصوت", "علي الصوت", "زود الصوت", "اعلي الصوت", "volume up", "increase volume")) {
-                if (audio.isVolumeFixed()) {
-                    reply("هذا الجهاز لا يسمح للتطبيق بتغيير مستوى الصوت مباشرة.");
-                    return true;
-                }
-                int target = Math.min(max, current + 1);
-                audio.setStreamVolume(AudioManager.STREAM_MUSIC, target, AudioManager.FLAG_SHOW_UI);
-                reply(target == current ? "الصوت عند الحد الأقصى بالفعل." : "تم رفع الصوت درجة واحدة.");
-                return true;
-            }
-            if (has(normalized, "اخفض الصوت", "وطي الصوت", "خفض الصوت", "قلل الصوت", "volume down", "decrease volume", "lower volume")) {
-                if (audio.isVolumeFixed()) {
-                    reply("هذا الجهاز لا يسمح للتطبيق بتغيير مستوى الصوت مباشرة.");
-                    return true;
-                }
-                int target = Math.max(0, current - 1);
-                audio.setStreamVolume(AudioManager.STREAM_MUSIC, target, AudioManager.FLAG_SHOW_UI);
-                reply(target == current ? "الصوت عند الحد الأدنى بالفعل." : "تم خفض الصوت درجة واحدة.");
-                return true;
-            }
+            // Natural "volume up/down" changes by three notches; explicit one-step wording stays one.
+            int steps = has(normalized, "درجه واحده", "درجة واحدة", "خطوه واحده", "one step", "one notch") ? 1 : 3;
+            int target = up ? Math.min(max, current + steps) : Math.max(0, current - steps);
+            audio.setStreamVolume(AudioManager.STREAM_MUSIC, target, AudioManager.FLAG_SHOW_UI);
+            int actual = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+            reply((up ? "تم رفع الصوت إلى " : "تم خفض الصوت إلى ") + actual + " من " + max + ".");
+            return true;
         } catch (SecurityException e) {
             reply("النظام منع التطبيق من تغيير مستوى الصوت على هذا الجهاز.");
             return true;
@@ -621,7 +640,6 @@ public class MainActivity extends Activity {
             reply("تعذر تنفيذ أمر الصوت على هذا التلفزيون.");
             return true;
         }
-        return false;
     }
 
     protected void sendToAi(String message) {
