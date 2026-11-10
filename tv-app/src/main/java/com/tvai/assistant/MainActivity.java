@@ -18,6 +18,8 @@ import java.util.Map;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.StatFs;
 import android.os.Environment;
 import android.content.pm.PackageInfo;
@@ -69,6 +71,7 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         buildUi();
+        if (getIntent() != null && getIntent().getBooleanExtra("start_voice", false)) new Handler(Looper.getMainLooper()).postDelayed(() -> startListening(), 700);
         tokenInput.setText(getPreferences(MODE_PRIVATE).getString("access_token", ""));
         tts = new TextToSpeech(this, result -> {
             if (result == TextToSpeech.SUCCESS) { ttsReady = true; tts.setLanguage(new Locale("ar")); }
@@ -155,6 +158,12 @@ public class MainActivity extends Activity {
             setStatus("Speech language changed / تم تغيير لغة التعرف على الصوت");
         });
         root.addView(lang);
+        Button floating = button("Enable floating AI button / تفعيل الزر العائم");
+        floating.setOnClickListener(v -> enableFloatingAssistant());
+        root.addView(floating);
+        Button usage = button("Check Usage Access / فحص إذن التطبيقات");
+        usage.setOnClickListener(v -> { if (hasUsageAccess()) reply("إذن Usage Access مفعّل بالفعل."); else openUsageAccessSettings(); });
+        root.addView(usage);
 
         transcript = label("You said / قلت: —");
         root.addView(transcript);
@@ -431,7 +440,7 @@ public class MainActivity extends Activity {
                 } else if ("audit_apps".equals(name)) {
                     reply(auditInstalledApps());
                 } else if ("open_usage_access".equals(name)) {
-                    launchIntent(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS), "Usage access");
+                    openUsageAccessSettings();
                 } else if ("open_app_details".equals(name)) {
                     String pkg = args.optString("packageName", "");
                     if (isInstalledPackage(pkg)) {
@@ -569,6 +578,42 @@ public class MainActivity extends Activity {
                 .append("\\nتطبيقات تحتاج مراجعة إضافية حسب الأذونات: ").append(flagged)
                 .append("\\nتنبيه: الأذونات الحساسة لا تثبت وجود فيروس. هذا تدقيق مبدئي وليس مضاد فيروسات أو فحصًا للملفات.");
         return report.toString();
+    }
+
+    private void openUsageAccessSettings() {
+        getPreferences(MODE_PRIVATE).edit().putBoolean("pending_usage_check", true).apply();
+        try { startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)); reply("افتح Mohamed TV AI Assistant وفعّل السماح بالوصول إلى بيانات الاستخدام، ثم ارجع إلى التطبيق."); }
+        catch (Exception e) { getPreferences(MODE_PRIVATE).edit().putBoolean("pending_usage_check", false).apply(); reply("تعذر فتح صفحة Usage Access. افتح إعدادات الجهاز ثم التطبيقات ثم Special app access ثم Usage access إن كانت متاحة."); }
+    }
+    private void enableFloatingAssistant() {
+        if (Build.VERSION.SDK_INT >= 23 && !Settings.canDrawOverlays(this)) {
+            getPreferences(MODE_PRIVATE).edit().putBoolean("pending_overlay_enable", true).apply();
+            try { startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()))); reply("اسمح بالظهور فوق التطبيقات الأخرى، ثم ارجع إلى المساعد."); }
+            catch (Exception e) { reply("إعداد الظهور فوق التطبيقات غير متاح على هذا التلفزيون."); }
+            return;
+        }
+        startFloatingService();
+    }
+    private void startFloatingService() {
+        try { startService(new Intent(this, FloatingBubbleService.class)); reply("تم تشغيل الزر العائم. اضغطه لفتح المساعد وبدء التحدث، ثم استخدم زر الرجوع للعودة للتطبيق السابق."); }
+        catch (Exception e) { reply("تعذر تشغيل الزر العائم على هذا الجهاز."); }
+    }
+    @Override protected void onResume() {
+        super.onResume();
+        if (getPreferences(MODE_PRIVATE).getBoolean("pending_usage_check", false)) {
+            getPreferences(MODE_PRIVATE).edit().putBoolean("pending_usage_check", false).apply();
+            if (hasUsageAccess()) reply("تم منح Usage Access بنجاح. يمكنك الآن طلب التطبيقات التي استخدمها النظام مؤخرًا.");
+            else reply("ما زال Usage Access غير مفعّل. لم يتم منح الإذن بعد؛ فعّل السماح لهذا التطبيق في صفحة Usage Access.");
+        }
+        if (getPreferences(MODE_PRIVATE).getBoolean("pending_overlay_enable", false)) {
+            getPreferences(MODE_PRIVATE).edit().putBoolean("pending_overlay_enable", false).apply();
+            if (Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this)) startFloatingService();
+            else reply("لم يتم منح إذن الظهور فوق التطبيقات؛ لم يتم تشغيل الزر العائم.");
+        }
+    }
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent); setIntent(intent);
+        if (intent != null && intent.getBooleanExtra("start_voice", false)) new Handler(Looper.getMainLooper()).postDelayed(() -> startListening(), 500);
     }
 
     private boolean hasUsageAccess() {
