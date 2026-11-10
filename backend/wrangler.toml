@@ -12,9 +12,31 @@ GROQ_MODEL = "openai/gpt-oss-120b"
 # wrangler secret put GROQ_API_KEY
 # wrangler secret put DEVICE_ADMIN_SECRET
 #
-# Configure all four Cloudflare Rate Limiting bindings in the Worker dashboard:
-# ENROLL_LIMITER, RATE_LIMITER, DEVICE_RATE_LIMITER, ADMIN_LIMITER.
-# Do not deploy until all four bindings and all three secrets are configured.
+# Rate-limit namespace IDs must be unique within your Cloudflare account.
+# These are starter IDs; change them if any are already used by another Worker.
+# Cloudflare's Worker Rate Limiting API supports approximate 10s or 60s windows,
+# local to each Cloudflare location (not a strict worldwide/global ceiling).
+[[ratelimits]]
+name = "ENROLL_LIMITER"
+namespace_id = "7401101"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "7401102"
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "DEVICE_RATE_LIMITER"
+namespace_id = "7401103"
+simple = { limit = 30, period = 60 }
+
+[[ratelimits]]
+name = "ADMIN_LIMITER"
+namespace_id = "7401104"
+simple = { limit = 10, period = 60 }
+
+# Do not deploy until all bindings and all three secrets are configured.
 
 [[durable_objects.bindings]]
 name = "AUTH_CHALLENGES"
@@ -26,4 +48,44 @@ class_name = "AuthDeviceStore"
 
 [[migrations]]
 tag = "auth-v1"
+new_sqlite_classes = ["AuthChallengeStore", "AuthDeviceStore"]
+
+# Isolated staging Worker. Bindings and vars are repeated because Wrangler
+# environments do not inherit them. Secrets must be added separately with --env staging.
+[env.staging]
+workers_dev = true
+
+[env.staging.vars]
+GROQ_MODEL = "openai/gpt-oss-120b"
+
+[[env.staging.ratelimits]]
+name = "ENROLL_LIMITER"
+namespace_id = "7401201"
+simple = { limit = 5, period = 60 }
+
+[[env.staging.ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "7401202"
+simple = { limit = 30, period = 60 }
+
+[[env.staging.ratelimits]]
+name = "DEVICE_RATE_LIMITER"
+namespace_id = "7401203"
+simple = { limit = 15, period = 60 }
+
+[[env.staging.ratelimits]]
+name = "ADMIN_LIMITER"
+namespace_id = "7401204"
+simple = { limit = 5, period = 60 }
+
+[[env.staging.durable_objects.bindings]]
+name = "AUTH_CHALLENGES"
+class_name = "AuthChallengeStore"
+
+[[env.staging.durable_objects.bindings]]
+name = "AUTH_DEVICES"
+class_name = "AuthDeviceStore"
+
+[[env.staging.migrations]]
+tag = "auth-staging-v1"
 new_sqlite_classes = ["AuthChallengeStore", "AuthDeviceStore"]
