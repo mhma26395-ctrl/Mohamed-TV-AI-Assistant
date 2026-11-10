@@ -190,6 +190,7 @@ export default {
     try {
       upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
+        signal: AbortSignal.timeout(25000),
         headers: {
           "content-type": "application/json",
           "authorization": `Bearer ${env.GROQ_API_KEY}`
