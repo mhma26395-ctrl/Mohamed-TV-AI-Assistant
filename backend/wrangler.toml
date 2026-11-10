@@ -3,10 +3,12 @@ main = "worker.js"
 compatibility_date = "2026-11-10"
 
 [vars]
-GEMINI_MODEL = "gemini-2.5-flash"
+# Model ID is configurable without changing the Android app.
+# This is the selected starting model; confirm the account's free-tier quota before public use.
+GROQ_MODEL = "openai/gpt-oss-120b"
 
-# Configure these as encrypted Worker secrets, never as plain vars:
-# wrangler secret put GEMINI_API_KEY
+# Configure encrypted Worker secrets only; never commit values:
+# wrangler secret put GROQ_API_KEY
 # wrangler secret put APP_ACCESS_TOKEN
 #
 # Configure a Cloudflare Rate Limiting binding named RATE_LIMITER
