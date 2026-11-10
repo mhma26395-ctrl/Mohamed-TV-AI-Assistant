@@ -188,25 +188,19 @@ test("P-256 device signature accepts the correct message and rejects tampering",
   assert.equal(await verifyDeviceSignature(toBase64Url(spki), toBase64Url(der), message + "-changed"), false);
 });
 
-test("P-256 device signature rejects non-canonical DER INTEGER padding", async () => {
+test("P-256 device signature rejects non-canonical DER INTEGER padding deterministically", async () => {
   const pair = await crypto.subtle.generateKey(
     { name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]
   );
   const spki = new Uint8Array(await crypto.subtle.exportKey("spki", pair.publicKey));
   const message = "enroll|" + installId + "|padding-test";
-  const raw = new Uint8Array(await crypto.subtle.sign(
-    { name: "ECDSA", hash: "SHA-256" }, pair.privateKey, new TextEncoder().encode(message)
-  ));
-  const validDer = rawSignatureToDer(raw);
-  const rLength = validDer[3];
-  const rStart = 4;
-  const r = Buffer.from(validDer.subarray(rStart, rStart + rLength));
-  if (r[0] === 0) return; // This rare signature already requires a leading zero.
-  const paddedR = Buffer.concat([Buffer.from([0]), r]);
-  const sStart = rStart + rLength + 2;
-  const s = Buffer.from(validDer.subarray(sStart));
-  const body = Buffer.concat([Buffer.from([0x02, paddedR.length]), paddedR, s]);
-  const nonCanonical = Buffer.concat([Buffer.from([0x30, body.length]), body]);
+  // r=1 is positive and valid as an INTEGER, but the extra leading zero is redundant.
+  // This makes the malformed DER case deterministic instead of depending on random ECDSA output.
+  const nonCanonical = Buffer.from([
+    0x30, 0x08,
+    0x02, 0x02, 0x00, 0x01,
+    0x02, 0x02, 0x00, 0x01
+  ]);
   assert.equal(await verifyDeviceSignature(toBase64Url(spki), toBase64Url(nonCanonical), message), false);
 });
 
