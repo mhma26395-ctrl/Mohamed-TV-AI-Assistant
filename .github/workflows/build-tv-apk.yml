@@ -12,7 +12,7 @@ permissions:
   contents: read
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,16 +21,22 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Restore stable debug signing key
+        run: |
+          base64 --decode tv-app/debug.keystore.base64 > tv-app/debug.keystore
+          test -s tv-app/debug.keystore
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.9
       - name: Build debug APK
         run: gradle assembleDebug
+      - name: Verify APK output
+        run: test -s tv-app/build/outputs/apk/debug/tv-app-debug.apk
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Mohamed-TV-AI-Assistant-debug
+          name: Mohamed-TV-AI-Assistant-0.2.0-debug
           path: tv-app/build/outputs/apk/debug/tv-app-debug.apk
           if-no-files-found: error
           retention-days: 14
