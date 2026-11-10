@@ -61,6 +61,7 @@ final class DeviceAuth {
             JSONObject enrolled = post("/v1/auth/enroll", new JSONObject()
                     .put("installId", installId).put("nonce", nonce)
                     .put("publicKey", publicKey).put("signature", signature));
+            if (enrolled.optBoolean("pending", false)) throw new SecurityException("device_pending_approval:" + installId);
             if (!enrolled.optBoolean("enrolled", false)) throw new SecurityException("device_enrollment_failed");
             prefs.edit().putBoolean("enrolled", true).apply();
         }
