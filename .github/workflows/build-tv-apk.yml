@@ -35,7 +35,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Mohamed-TV-AI-Assistant-0.6.8-debug
+          name: Mohamed-TV-AI-Assistant-0.6.9-debug
           path: tv-app/build/outputs/apk/debug/tv-app-debug.apk
           if-no-files-found: error
           retention-days: 14
