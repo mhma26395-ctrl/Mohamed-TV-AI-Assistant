@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AuthChallengeStore, AuthDeviceStore } from "../worker.js";
+import worker, { AuthChallengeStore, AuthDeviceStore } from "../worker.js";
 
 class MemoryStorage {
   constructor() { this.values = new Map(); this.alarmAt = null; }
@@ -114,4 +114,37 @@ test("concurrent device registration cannot replace the first key", async () => 
   assert.equal(results.filter(result => result.status === 409).length, 1);
   const current = await read(await store.fetch(request("/get", {})));
   assert.ok(["key-A", "key-B"].includes(current.body.device.publicKey));
+});
+
+test("health endpoint exposes only basic service status", async () => {
+  const response = await worker.fetch(new Request("https://unit.test/v1/health"), {});
+  const result = await read(response);
+  assert.equal(result.status, 200);
+  assert.equal(result.body.ok, true);
+  assert.equal("secrets" in result.body, false);
+});
+
+test("authentication endpoints fail closed when required configuration is missing", async () => {
+  const response = await worker.fetch(request("/v1/auth/challenge", {
+    installId: "123e4567-e89b-42d3-a456-426614174000", purpose: "enroll"
+  }), {});
+  assert.equal(response.status, 503);
+});
+
+test("authentication endpoint rejects non-object JSON bodies cleanly", async () => {
+  const allow = { limit: async () => ({ success: true }) };
+  const unusedNamespace = {
+    idFromName: name => name,
+    get: () => ({ fetch: async () => new Response(JSON.stringify({ ok: false }), { status: 404 }) })
+  };
+  const env = {
+    AUTH_DEVICES: unusedNamespace,
+    AUTH_CHALLENGES: unusedNamespace,
+    SESSION_SIGNING_SECRET: "x".repeat(48),
+    ENROLL_LIMITER: allow,
+    RATE_LIMITER: allow
+  };
+  const response = await worker.fetch(request("/v1/auth/challenge", null), env);
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, "invalid_request");
 });
