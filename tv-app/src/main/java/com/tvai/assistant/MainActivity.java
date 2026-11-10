@@ -716,10 +716,16 @@ public class MainActivity extends Activity {
 
     private String auditInstalledApps() {
         PackageManager pm = getPackageManager();
-        StringBuilder report = new StringBuilder("مراجعة أولية للتطبيقات المثبتة:\\n");
+        StringBuilder report = new StringBuilder("مراجعة أولية للتطبيقات المثبتة القابلة للتشغيل:\\n");
         int scanned = 0, flagged = 0;
         try {
-            for (PackageInfo pi : pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)) {
+            JSONArray visibleApps = getInstalledLaunchableAppsJson();
+            for (int i = 0; i < visibleApps.length(); i++) {
+                JSONObject app = visibleApps.optJSONObject(i);
+                if (app == null) continue;
+                String packageName = app.optString("packageName", "");
+                if (packageName.isEmpty()) continue;
+                PackageInfo pi = pm.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS);
                 if (pi.applicationInfo == null || (pi.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0) continue;
                 scanned++;
                 ArrayList<String> risky = new ArrayList<>();
@@ -734,19 +740,19 @@ public class MainActivity extends Activity {
                 if (risky.size() >= 4) {
                     flagged++;
                     report.append("مراجعة إضافية مطلوبة: ").append(pi.applicationInfo.loadLabel(pm)).append(" — أذونات حساسة متعددة: ");
-                    for (int i = 0; i < Math.min(4, risky.size()); i++) {
-                        if (i > 0) report.append(", ");
-                        report.append(risky.get(i));
+                    for (int j = 0; j < Math.min(4, risky.size()); j++) {
+                        if (j > 0) report.append(", ");
+                        report.append(risky.get(j));
                     }
                     report.append("\\n");
                 }
             }
         } catch (Exception e) {
-            return "تعذر إكمال مراجعة التطبيقات. قد يقيّد إصدار Android الوصول إلى قائمة التطبيقات.";
+            return "تعذر إكمال مراجعة التطبيقات القابلة للتشغيل. قد يقيّد إصدار Android الوصول إلى بعض التطبيقات.";
         }
-        report.append("عدد تطبيقات المستخدم التي تمت مراجعتها: ").append(scanned)
+        report.append("عدد تطبيقات المستخدم القابلة للتشغيل التي تمت مراجعتها: ").append(scanned)
                 .append("\\nتطبيقات تحتاج مراجعة إضافية حسب الأذونات: ").append(flagged)
-                .append("\\nتنبيه: الأذونات الحساسة لا تثبت وجود فيروس. هذا تدقيق مبدئي وليس مضاد فيروسات أو فحصًا للملفات.");
+                .append("\\nتنبيه: تتم مراجعة التطبيقات التي يعرضها Android كقابلة للتشغيل فقط. الأذونات الحساسة لا تثبت وجود فيروس؛ هذا تدقيق مبدئي وليس مضاد فيروسات أو فحصًا للملفات.");
         return report.toString();
     }
 
