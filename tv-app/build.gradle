@@ -15,17 +15,4 @@ android {
         versionCode 14
         versionName '0.6.2'
     }
-    signingConfigs {
-        debug {
-            storeFile file('debug.keystore')
-            storePassword 'android'
-            keyAlias 'tvai-debug'
-            keyPassword 'android'
-        }
-    }
-    buildTypes {
-        debug {
-            signingConfig signingConfigs.debug
-        }
-    }
 }
