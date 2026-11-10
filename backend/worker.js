@@ -371,10 +371,21 @@ async function rateLimit(binding, key) {
   const result = await binding.limit({ key });
   return !!result.success;
 }
+async function useChallengeStore(env, nonce, operation, payload) {
+  if (!env.AUTH_CHALLENGES) throw new Error("auth_challenge_store_unavailable");
+  const id = env.AUTH_CHALLENGES.idFromName(nonce);
+  const stub = env.AUTH_CHALLENGES.get(id);
+  const response = await stub.fetch("https://auth-challenge/" + operation, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload || {})
+  });
+  return await response.json();
+}
 async function authRoutes(request, env, url) {
   const registry = env.DEVICE_REGISTRY;
   const secret = env.SESSION_SIGNING_SECRET;
-  if (!registry || !secret || secret.length < 32 || !env.ENROLL_LIMITER || !env.RATE_LIMITER) {
+  if (!registry || !env.AUTH_CHALLENGES || !secret || secret.length < 32 || !env.ENROLL_LIMITER || !env.RATE_LIMITER) {
     return json({ error: "auth_service_unavailable" }, 503);
   }
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
@@ -390,7 +401,8 @@ async function authRoutes(request, env, url) {
       if (!record || record.status !== "active") return json({ error: "authentication_failed" }, 401);
     }
     const nonce = randomToken(32);
-    await registry.put("challenge:" + nonce, JSON.stringify({ installId: id, purpose, createdAt: Date.now() }), { expirationTtl: 120 });
+    const stored = await useChallengeStore(env, nonce, "create", { installId: id, purpose });
+    if (!stored.ok) return json({ error: "auth_service_unavailable" }, 503);
     return json({ ok: true, nonce, expiresIn: 120 });
   }
   if (url.pathname === "/v1/auth/enroll") {
@@ -400,9 +412,8 @@ async function authRoutes(request, env, url) {
     let body; try { body = await request.json(); } catch { return json({ error: "invalid_request" }, 400); }
     const id = String(body.installId || ""), nonce = String(body.nonce || ""), pub = String(body.publicKey || ""), sig = String(body.signature || "");
     if (!/^[0-9a-f-]{36}$/i.test(id) || nonce.length < 30 || pub.length > 1000 || sig.length > 300) return json({ error: "invalid_request" }, 400);
-    const challenge = await registry.get("challenge:" + nonce, "json");
-    if (!challenge || challenge.installId !== id || challenge.purpose !== "enroll") return json({ error: "authentication_failed" }, 401);
-    await registry.delete("challenge:" + nonce);
+    const challenge = await useChallengeStore(env, nonce, "consume", { installId: id, purpose: "enroll" });
+    if (!challenge.ok) return json({ error: "authentication_failed" }, 401);
     if (!await verifyDeviceSignature(pub, sig, "enroll|" + id + "|" + nonce)) return json({ error: "authentication_failed" }, 401);
     const existing = await registry.get("device:" + id, "json");
     if (existing) return json({ error: "enrollment_not_available" }, 409);
@@ -415,16 +426,50 @@ async function authRoutes(request, env, url) {
     if (!await rateLimit(env.ENROLL_LIMITER, "session:" + ip)) return json({ error: "rate_limited" }, 429);
     let body; try { body = await request.json(); } catch { return json({ error: "invalid_request" }, 400); }
     const id = String(body.installId || ""), nonce = String(body.nonce || ""), sig = String(body.signature || "");
-    const challenge = await registry.get("challenge:" + nonce, "json");
+    const challenge = await useChallengeStore(env, nonce, "consume", { installId: id, purpose: "session" });
     const device = await registry.get("device:" + id, "json");
-    if (!challenge || challenge.installId !== id || challenge.purpose !== "session" || !device || device.status !== "active") return json({ error: "authentication_failed" }, 401);
-    await registry.delete("challenge:" + nonce);
+    if (!challenge.ok || !device || device.status !== "active") return json({ error: "authentication_failed" }, 401);
     if (!await verifyDeviceSignature(device.publicKey, sig, "session|" + id + "|" + nonce)) return json({ error: "authentication_failed" }, 401);
     const now = Math.floor(Date.now()/1000);
     const token = await signSession({ iss: "mohamed-tv-ai", aud: "tv-app", sub: id, iat: now, exp: now + 600 }, secret);
     return json({ ok: true, token, expiresIn: 600 });
   }
   return json({ error: "not_found" }, 404);
+}
+
+
+export class AuthChallengeStore {
+  constructor(state) { this.state = state; }
+  async fetch(request) {
+    if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+    const url = new URL(request.url);
+    let body; try { body = await request.json(); } catch { return json({ ok: false }, 400); }
+    if (url.pathname === "/create") {
+      await this.state.storage.put("challenge", {
+        installId: String(body.installId || ""),
+        purpose: String(body.purpose || ""),
+        createdAt: Date.now()
+      });
+      await this.state.storage.setAlarm(Date.now() + 120000);
+      return json({ ok: true });
+    }
+    if (url.pathname === "/consume") {
+      const result = await this.state.storage.transaction(async txn => {
+        const challenge = await txn.get("challenge");
+        if (!challenge || challenge.installId !== body.installId ||
+            challenge.purpose !== body.purpose || Date.now() - challenge.createdAt > 120000) {
+          return { ok: false };
+        }
+        await txn.delete("challenge");
+        return { ok: true };
+      });
+      return json(result, result.ok ? 200 : 401);
+    }
+    return json({ ok: false }, 404);
+  }
+  async alarm() {
+    await this.state.storage.delete("challenge");
+  }
 }
 
 export default {
@@ -437,7 +482,7 @@ export default {
     if (request.method !== "POST" || !["/v1/assistant", "/v1/info"].includes(url.pathname)) {
       return json({ error: "not_found" }, 404);
     }
-    if (!env.DEVICE_REGISTRY || !env.SESSION_SIGNING_SECRET || env.SESSION_SIGNING_SECRET.length < 32 || !env.RATE_LIMITER || !env.DEVICE_RATE_LIMITER) {
+    if (!env.DEVICE_REGISTRY || !env.AUTH_CHALLENGES || !env.SESSION_SIGNING_SECRET || env.SESSION_SIGNING_SECRET.length < 32 || !env.RATE_LIMITER || !env.DEVICE_RATE_LIMITER) {
       return json({ error: "server_not_configured" }, 503);
     }
     if (url.pathname === "/v1/assistant" && !env.GROQ_API_KEY) {
