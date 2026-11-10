@@ -489,7 +489,12 @@ public class MainActivity extends Activity {
                 final String finalAnswer = answer;
                 runOnUiThread(() -> reply(finalAnswer));
             } catch (Exception e) {
-                runOnUiThread(() -> reply("تعذر الاتصال بمصدر المعلومات المباشرة. حاول مرة أخرى عند توفر الإنترنت."));
+                if (e.getMessage() != null && e.getMessage().startsWith("device_pending_approval:")) {
+                    String deviceId = e.getMessage().substring("device_pending_approval:".length());
+                    runOnUiThread(() -> reply("تم تسجيل هذا التلفزيون، لكنه ينتظر موافقة المسؤول قبل عرض المعلومات المباشرة. رقم الجهاز: " + deviceId));
+                } else {
+                    runOnUiThread(() -> reply("تعذر الاتصال بمصدر المعلومات المباشرة. تحقق من الإنترنت وحاول مرة أخرى."));
+                }
             } finally { if (connection != null) connection.disconnect(); }
         });
         return true;
