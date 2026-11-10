@@ -64,12 +64,23 @@ public class RemoteKeyProbeService extends AccessibilityService {
                 .apply();
 
             if (prefs.getBoolean("capture_armed", false)) {
+                String keyName = KeyEvent.keyCodeToString(keyCode);
                 prefs.edit()
                     .putInt("captured_key_code", keyCode)
-                    .putString("captured_key_name", KeyEvent.keyCodeToString(keyCode))
+                    .putString("captured_key_name", keyName)
                     .putBoolean("capture_armed", false)
-                    .putBoolean("capture_notice_pending", true)
+                    .putBoolean("capture_notice_pending", false)
                     .apply();
+                // Bring the existing TV activity forward with an explicit result.
+                // MainActivity uses singleTop, so this is delivered through onNewIntent.
+                try {
+                    Intent result = new Intent(this, MainActivity.class);
+                    result.setAction("com.tvai.assistant.REMOTE_KEY_CAPTURED");
+                    result.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                    result.putExtra("captured_key_code", keyCode);
+                    result.putExtra("captured_key_name", keyName);
+                    startActivity(result);
+                } catch (Exception ignored) { }
                 return false;
             }
 
