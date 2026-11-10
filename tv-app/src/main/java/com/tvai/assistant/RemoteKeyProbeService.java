@@ -6,9 +6,39 @@ import android.view.KeyEvent;
 import android.view.accessibility.AccessibilityEvent;
 
 public class RemoteKeyProbeService extends AccessibilityService {
+    // Essential TV keys must never be captured or consumed.
+    private boolean isProtectedSystemKey(int keyCode) {
+        return keyCode == KeyEvent.KEYCODE_DPAD_UP
+                || keyCode == KeyEvent.KEYCODE_DPAD_DOWN
+                || keyCode == KeyEvent.KEYCODE_DPAD_LEFT
+                || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+                || keyCode == KeyEvent.KEYCODE_DPAD_CENTER
+                || keyCode == KeyEvent.KEYCODE_ENTER
+                || keyCode == KeyEvent.KEYCODE_HOME
+                || keyCode == KeyEvent.KEYCODE_BACK
+                || keyCode == KeyEvent.KEYCODE_POWER
+                || keyCode == KeyEvent.KEYCODE_MENU
+                || keyCode == KeyEvent.KEYCODE_VOLUME_UP
+                || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
+                || keyCode == KeyEvent.KEYCODE_VOLUME_MUTE
+                || keyCode == KeyEvent.KEYCODE_ASSIST
+                || keyCode == KeyEvent.KEYCODE_VOICE_ASSIST
+                || keyCode == KeyEvent.KEYCODE_SEARCH
+                || keyCode == KeyEvent.KEYCODE_APP_SWITCH
+                || keyCode == KeyEvent.KEYCODE_TV_INPUT
+                || keyCode == KeyEvent.KEYCODE_GUIDE
+                || keyCode == KeyEvent.KEYCODE_SETTINGS;
+    }
+
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
+        android.content.SharedPreferences prefs = getSharedPreferences("remote_key_probe", MODE_PRIVATE);
+        if (isProtectedSystemKey(prefs.getInt("mapped_key_code", -1))) {
+            // Clear unsafe mappings saved by an older build.
+            prefs.edit().putBoolean("mapping_enabled", false).putInt("mapped_key_code", -1)
+                    .putString("mapped_key_name", "لم يتم اختيار زر").apply();
+        }
         android.accessibilityservice.AccessibilityServiceInfo info = getServiceInfo();
         if (info != null) {
             info.flags |= android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS;
@@ -19,11 +49,15 @@ public class RemoteKeyProbeService extends AccessibilityService {
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
         if (event == null) return false;
+        int keyCode = event.getKeyCode();
+        // Protected keys pass through unchanged, even while discovering a key.
+        if (isProtectedSystemKey(keyCode)) return false;
+
         android.content.SharedPreferences prefs = getSharedPreferences("remote_key_probe", MODE_PRIVATE);
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             prefs.edit()
-                .putInt("last_key_code", event.getKeyCode())
-                .putString("last_key_name", KeyEvent.keyCodeToString(event.getKeyCode()))
+                .putInt("last_key_code", keyCode)
+                .putString("last_key_name", KeyEvent.keyCodeToString(keyCode))
                 .putLong("last_key_time", System.currentTimeMillis())
                 .putInt("last_key_device_id", event.getDeviceId())
                 .putInt("last_key_scan_code", event.getScanCode())
@@ -31,8 +65,8 @@ public class RemoteKeyProbeService extends AccessibilityService {
 
             if (prefs.getBoolean("capture_armed", false)) {
                 prefs.edit()
-                    .putInt("captured_key_code", event.getKeyCode())
-                    .putString("captured_key_name", KeyEvent.keyCodeToString(event.getKeyCode()))
+                    .putInt("captured_key_code", keyCode)
+                    .putString("captured_key_name", KeyEvent.keyCodeToString(keyCode))
                     .putBoolean("capture_armed", false)
                     .putBoolean("capture_notice_pending", true)
                     .apply();
@@ -40,7 +74,8 @@ public class RemoteKeyProbeService extends AccessibilityService {
             }
 
             int mapped = prefs.getInt("mapped_key_code", -1);
-            if (prefs.getBoolean("mapping_enabled", false) && mapped >= 0 && event.getKeyCode() == mapped && event.getRepeatCount() == 0) {
+            if (prefs.getBoolean("mapping_enabled", false) && mapped >= 0
+                    && keyCode == mapped && event.getRepeatCount() == 0) {
                 try {
                     Intent launch = new Intent(this, CompactAssistantActivity.class);
                     launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -52,9 +87,9 @@ public class RemoteKeyProbeService extends AccessibilityService {
                 }
             }
         }
-        if (prefs.getBoolean("mapping_enabled", false) && prefs.getInt("mapped_key_code", -1) == event.getKeyCode()) {
-            return true;
-        }
+        if (event.getAction() == KeyEvent.ACTION_UP
+                && prefs.getBoolean("mapping_enabled", false)
+                && prefs.getInt("mapped_key_code", -1) == keyCode) return true;
         return false;
     }
 
