@@ -168,6 +168,7 @@ public class MainActivity extends Activity {
         root.addView(floating);
         Button stopFloating = button("Hide floating assistant / إخفاء الزر العائم");
         stopFloating.setOnClickListener(v -> {
+            getSharedPreferences("floating_assistant", MODE_PRIVATE).edit().putBoolean("enabled", false).apply();
             stopService(new Intent(this, FloatingBubbleService.class));
             reply("تم إيقاف الزر العائم.");
         });
@@ -945,6 +946,7 @@ public class MainActivity extends Activity {
     }
     private void startFloatingService() {
         try {
+            getSharedPreferences("floating_assistant", MODE_PRIVATE).edit().putBoolean("enabled", true).apply();
             Intent serviceIntent = new Intent(this, FloatingBubbleService.class);
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent);
             else startService(serviceIntent);
