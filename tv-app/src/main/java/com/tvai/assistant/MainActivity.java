@@ -1164,7 +1164,7 @@ public class MainActivity extends Activity {
         }
 
         String url = "https://www.youtube.com/results?search_query=" +
-                java.net.URLEncoder.encode(query, StandardCharsets.UTF_8);
+                Uri.encode(query);
         String[] packages = {"com.google.android.youtube.tv", "com.google.android.youtube", "com.google.android.youtube.tvunplugged"};
         for (String pkg : packages) {
             try {
