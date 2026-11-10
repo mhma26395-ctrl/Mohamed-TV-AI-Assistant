@@ -12,6 +12,7 @@ Configure these in the Cloudflare Worker environment (Production and Preview sep
 | `ENROLL_LIMITER` | Rate limiting binding | Per-IP and global throttling for enrollment/challenge/session issuance |
 | `RATE_LIMITER` | Rate limiting binding | Per-IP API throttling |
 | `DEVICE_RATE_LIMITER` | Rate limiting binding | Per-installation API throttling |
+| `ADMIN_LIMITER` | Rate limiting binding | Per-IP throttling for administrative revocation |
 
 Set rate-limit thresholds conservatively. Suggested starting policy: enrollment 3 requests per IP per 10 minutes and a global enrollment ceiling; session issuance 20 per IP per 10 minutes; API requests 30 per device per minute and 60 per IP per minute. Adapt after observing real usage and Cloudflare plan limits. The exact limit/window configuration is managed in Cloudflare, not in this source file.
 
@@ -37,6 +38,7 @@ Both classes are exported from `backend/worker.js`. Configure the three rate-lim
 
 - `SESSION_SIGNING_SECRET`: at least 32 cryptographically random bytes, encoded as a long random string. Rotate only with a planned session invalidation.
 - `GROQ_API_KEY`: required for assistant inference only; keep it in Worker secrets.
+- `DEVICE_ADMIN_SECRET`: at least 32 random bytes, stored only as a Worker secret. It protects the administrative device-revocation endpoint. Never put it in the Android app or a public client.
 - The legacy `APP_ACCESS_TOKEN` is no longer used by this Worker authentication path. Remove it from Worker secrets after confirming no older private test client depends on it.
 
 Never put any of these values in GitHub, app resources, Gradle files, logs, or the APK.
@@ -65,4 +67,4 @@ To revoke an installation, invoke the `revoke` operation on the Durable Object i
 
 ## Deployment gate
 
-Do not deploy until all five bindings and both secrets are configured, then test all enrollment/session and API flows against a staging Worker. The current Worker deliberately returns `503` when required bindings are missing. `AUTH_DEVICES` and `AUTH_CHALLENGES` are declared in `backend/wrangler.toml`; ensure the migration `auth-v1` is applied. No production deployment was performed as part of the source changes.
+Do not deploy until all six bindings and all three secrets are configured, then test all enrollment/session and API flows against a staging Worker. The current Worker deliberately returns `503` when required bindings are missing. `AUTH_DEVICES` and `AUTH_CHALLENGES` are declared in `backend/wrangler.toml`; ensure the migration `auth-v1` is applied. No production deployment was performed as part of the source changes.
