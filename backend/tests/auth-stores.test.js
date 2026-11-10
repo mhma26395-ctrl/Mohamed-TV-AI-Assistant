@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import worker, { AuthChallengeStore, AuthDeviceStore } from "../worker.js";
+import worker, { AuthChallengeStore, AuthDeviceStore, verifyDeviceSignature, signSession, verifySession } from "../worker.js";
 
 class MemoryStorage {
   constructor() { this.values = new Map(); this.alarmAt = null; }
@@ -147,4 +147,101 @@ test("authentication endpoint rejects non-object JSON bodies cleanly", async () 
   const response = await worker.fetch(request("/v1/auth/challenge", null), env);
   assert.equal(response.status, 400);
   assert.equal((await response.json()).error, "invalid_request");
+});
+
+
+const toBase64Url = bytes => Buffer.from(bytes).toString("base64url");
+const derInteger = raw => {
+  let value = Buffer.from(raw);
+  while (value.length > 1 && value[0] === 0) value = value.subarray(1);
+  if (value[0] & 0x80) value = Buffer.concat([Buffer.from([0]), value]);
+  return Buffer.concat([Buffer.from([0x02, value.length]), value]);
+};
+const rawSignatureToDer = raw => {
+  const r = derInteger(raw.subarray(0, 32));
+  const s = derInteger(raw.subarray(32, 64));
+  const body = Buffer.concat([r, s]);
+  return Buffer.concat([Buffer.from([0x30, body.length]), body]);
+};
+const installId = "123e4567-e89b-42d3-a456-426614174000";
+const makeDeviceNamespace = status => ({
+  idFromName: id => id,
+  get: () => ({
+    fetch: async () => new Response(JSON.stringify({
+      ok: true, device: { status, publicKey: "not-needed-by-session-test" }
+    }), { headers: { "content-type": "application/json" } })
+  })
+});
+
+test("P-256 device signature accepts the correct message and rejects tampering", async () => {
+  const pair = await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]
+  );
+  const spki = new Uint8Array(await crypto.subtle.exportKey("spki", pair.publicKey));
+  const message = "session|" + installId + "|test-challenge";
+  const raw = new Uint8Array(await crypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" }, pair.privateKey, new TextEncoder().encode(message)
+  ));
+  assert.equal(raw.length, 64);
+  const der = rawSignatureToDer(raw);
+  assert.equal(await verifyDeviceSignature(toBase64Url(spki), toBase64Url(der), message), true);
+  assert.equal(await verifyDeviceSignature(toBase64Url(spki), toBase64Url(der), message + "-changed"), false);
+});
+
+test("P-256 device signature rejects malformed DER and invalid key data", async () => {
+  assert.equal(await verifyDeviceSignature("not-a-key", "not-a-signature", "message"), false);
+  const pair = await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]
+  );
+  const spki = new Uint8Array(await crypto.subtle.exportKey("spki", pair.publicKey));
+  assert.equal(await verifyDeviceSignature(toBase64Url(spki), toBase64Url(new Uint8Array([0x30, 0x01, 0x00])), "message"), false);
+});
+
+test("signed session token validates only while device is active", async () => {
+  const secret = "S".repeat(48);
+  const env = { AUTH_DEVICES: makeDeviceNamespace("active") };
+  const now = Math.floor(Date.now() / 1000);
+  const token = await signSession({
+    iss: "mohamed-tv-ai", aud: "tv-app", sub: installId, iat: now, exp: now + 600
+  }, secret);
+  assert.equal((await verifySession(token, secret, env)).sub, installId);
+  env.AUTH_DEVICES = makeDeviceNamespace("revoked");
+  assert.equal(await verifySession(token, secret, env), null);
+});
+
+test("session verification rejects altered token, wrong secret and expired claims", async () => {
+  const secret = "S".repeat(48);
+  const env = { AUTH_DEVICES: makeDeviceNamespace("active") };
+  const now = Math.floor(Date.now() / 1000);
+  const good = await signSession({
+    iss: "mohamed-tv-ai", aud: "tv-app", sub: installId, iat: now, exp: now + 600
+  }, secret);
+  assert.equal(await verifySession(good + "x", secret, env), null);
+  assert.equal(await verifySession(good, "different-secret".padEnd(48, "x"), env), null);
+  const expired = await signSession({
+    iss: "mohamed-tv-ai", aud: "tv-app", sub: installId, iat: now - 900, exp: now - 1
+  }, secret);
+  assert.equal(await verifySession(expired, secret, env), null);
+});
+
+test("session verification rejects unsupported JWT header algorithms and extra claims", async () => {
+  const secret = "S".repeat(48);
+  const env = { AUTH_DEVICES: makeDeviceNamespace("active") };
+  const now = Math.floor(Date.now() / 1000);
+  const badAlgorithm = await signSession({
+    iss: "mohamed-tv-ai", aud: "tv-app", sub: installId, iat: now, exp: now + 600,
+    header: { alg: "none" }
+  }, secret);
+  // signSession always emits the fixed HS256 header; alter its first segment to test parser rejection.
+  const parts = badAlgorithm.split(".");
+  parts[0] = toBase64Url(Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" })));
+  const unsignedHeader = parts[0] + "." + parts[1];
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  parts[2] = toBase64Url(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(unsignedHeader))));
+  assert.equal(await verifySession(parts.join("."), secret, env), null);
+
+  const extraClaim = await signSession({
+    iss: "mohamed-tv-ai", aud: "tv-app", sub: installId, iat: now, exp: now + 600, admin: true
+  }, secret);
+  assert.equal(await verifySession(extraClaim, secret, env), null);
 });
