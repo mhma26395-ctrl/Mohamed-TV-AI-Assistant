@@ -73,9 +73,10 @@ test("challenge alarm removes stored challenge", async () => {
 test("device registration is first-write-wins and revocation is persistent", async () => {
   const storage = new MemoryStorage();
   const store = new AuthDeviceStore({ storage });
-  const first = await read(await store.fetch(request("/register", { device: { publicKey: "key-A", status: "active" } })));
-  const second = await read(await store.fetch(request("/register", { device: { publicKey: "key-B", status: "active" } })));
+  const first = await read(await store.fetch(request("/register", { device: { publicKey: "A".repeat(100), status: "pending" } })));
+  const second = await read(await store.fetch(request("/register", { device: { publicKey: "B".repeat(100), status: "pending" } })));
   assert.equal(first.body.ok, true);
+  assert.equal(first.body.status, "pending");
   assert.equal(second.status, 409);
   assert.equal((await read(await store.fetch(request("/revoke", {})))).body.ok, true);
   const current = await read(await store.fetch(request("/get", {})));
@@ -107,13 +108,13 @@ test("concurrent device registration cannot replace the first key", async () => 
   const storage = new MemoryStorage();
   const store = new AuthDeviceStore({ storage });
   const results = await Promise.all([
-    store.fetch(request("/register", { device: { publicKey: "key-A", status: "active" } })).then(read),
-    store.fetch(request("/register", { device: { publicKey: "key-B", status: "active" } })).then(read)
+    store.fetch(request("/register", { device: { publicKey: "A".repeat(100), status: "pending" } })).then(read),
+    store.fetch(request("/register", { device: { publicKey: "B".repeat(100), status: "pending" } })).then(read)
   ]);
   assert.equal(results.filter(result => result.body.ok).length, 1);
   assert.equal(results.filter(result => result.status === 409).length, 1);
   const current = await read(await store.fetch(request("/get", {})));
-  assert.ok(["key-A", "key-B"].includes(current.body.device.publicKey));
+  assert.ok(["A".repeat(100), "B".repeat(100)].includes(current.body.device.publicKey));
 });
 
 test("health endpoint exposes only basic service status", async () => {
@@ -308,7 +309,7 @@ test("new devices remain pending until an administrator approves them", async ()
   const storage = new MemoryStorage();
   const store = new AuthDeviceStore({ storage });
   const registration = await read(await store.fetch(request("/register", {
-    device: { publicKey: "public-key-A", status: "pending", createdAt: Date.now(), keyVersion: 1 }
+    device: { publicKey: "A".repeat(100), status: "pending", createdAt: Date.now(), keyVersion: 1 }
   })));
   assert.equal(registration.body.ok, true);
   assert.equal(registration.body.status, "pending");
@@ -327,7 +328,7 @@ test("same pending device can retry enrollment but a different key cannot replac
   await store.fetch(request("/register", { device }));
   const retry = await read(await store.fetch(request("/register", { device })));
   const replacement = await read(await store.fetch(request("/register", {
-    device: { ...device, publicKey: "public-key-B" }
+    device: { ...device, publicKey: "B".repeat(100) }
   })));
   assert.equal(retry.body.ok, true);
   assert.equal(retry.body.status, "pending");
