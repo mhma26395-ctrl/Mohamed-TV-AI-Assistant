@@ -591,7 +591,19 @@ export class SecurityEventStore {
       await txn.put(key, next);
       return next;
     });
+    await this.state.storage.setAlarm(Date.now() + 86400000);
     return json({ ok: true, count });
+  }
+  async alarm() {
+    const cutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const entries = await this.state.storage.list({ prefix: "daily:", limit: 500 });
+    const removals = [];
+    for (const key of entries.keys()) {
+      const day = String(key).split(":")[1] || "";
+      if (day < cutoff) removals.push(key);
+    }
+    if (removals.length) await this.state.storage.delete(removals);
+    await this.state.storage.setAlarm(Date.now() + 86400000);
   }
 }
 
