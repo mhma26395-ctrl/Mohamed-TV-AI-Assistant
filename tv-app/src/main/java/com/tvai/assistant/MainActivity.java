@@ -336,8 +336,16 @@ public class MainActivity extends Activity {
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
                 connection.setRequestProperty("Authorization", "Bearer " + token);
                 JSONObject payload = new JSONObject();
-                payload.put("message", message);
-                payload.put("installedApps", getInstalledLaunchableAppsJson());
+                JSONArray installedApps = getInstalledLaunchableAppsJson();
+                StringBuilder appContext = new StringBuilder("\\n\\nACTUAL_INSTALLED_APPS_ON_THIS_TV. Use only exact packageName values below for launch_app; never guess package names. If the requested app is not listed, say so.\\n");
+                for (int i = 0; i < installedApps.length() && i < 80; i++) {
+                    JSONObject app = installedApps.optJSONObject(i);
+                    if (app == null) continue;
+                    String line = app.optString("name") + " | " + app.optString("packageName") + "\\n";
+                    if (appContext.length() + line.length() > 2600) break;
+                    appContext.append(line);
+                }
+                payload.put("message", message + appContext.toString());
                 try (OutputStream out = connection.getOutputStream()) {
                     out.write(payload.toString().getBytes(StandardCharsets.UTF_8));
                 }
