@@ -317,9 +317,15 @@ const b64u = (bytes) => {
   return btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 };
 const unb64u = (value) => {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]+$/.test(value) || value.length % 4 === 1) {
+    throw new Error("invalid_base64url");
+  }
   const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4);
   return Uint8Array.from(atob(padded), c => c.charCodeAt(0));
 };
+const isObject = value => value !== null && typeof value === "object" && !Array.isArray(value);
+const validInstallId = value => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+const validNonce = value => typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value);
 const utf8 = (value) => new TextEncoder().encode(value);
 const randomToken = (length = 32) => {
   const bytes = crypto.getRandomValues(new Uint8Array(length));
@@ -369,9 +375,14 @@ async function verifySession(token, secret, env) {
     if (parts.length !== 3) return null;
     const key = await crypto.subtle.importKey("raw", utf8(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
     if (!await crypto.subtle.verify("HMAC", key, unb64u(parts[2]), utf8(parts[0] + "." + parts[1]))) return null;
+    const header = JSON.parse(new TextDecoder().decode(unb64u(parts[0])));
+    if (!isObject(header) || header.alg !== "HS256" || header.typ !== "JWT" || Object.keys(header).some(k => !["alg", "typ"].includes(k))) return null;
     const claims = JSON.parse(new TextDecoder().decode(unb64u(parts[1])));
     const now = Math.floor(Date.now()/1000);
-    if (claims.iss !== "mohamed-tv-ai" || claims.aud !== "tv-app" || !claims.sub || !Number.isInteger(claims.iat) || claims.iat > now + 30 || !Number.isInteger(claims.exp) || claims.exp <= now || claims.exp > now + 601) return null;
+    if (!isObject(claims) || claims.iss !== "mohamed-tv-ai" || claims.aud !== "tv-app" ||
+        !validInstallId(claims.sub) || !Number.isInteger(claims.iat) || claims.iat > now + 30 ||
+        !Number.isInteger(claims.exp) || claims.exp <= now || claims.exp > now + 601 ||
+        claims.exp <= claims.iat || Object.keys(claims).some(k => !["iss", "aud", "sub", "iat", "exp"].includes(k))) return null;
     const record = await useDeviceStore(env, claims.sub, "get");
     if (!record || !record.ok || !record.device || record.device.status !== "active") return null;
     return claims;
@@ -413,9 +424,10 @@ async function authRoutes(request, env, url) {
     if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
     if (!await rateLimit(env.ENROLL_LIMITER, "challenge:" + ip)) return json({ error: "rate_limited" }, 429);
     let body; try { body = await request.json(); } catch { return json({ error: "invalid_request" }, 400); }
-    const id = String(body.installId || "");
-    const purpose = String(body.purpose || "");
-    if (!/^[0-9a-f-]{36}$/i.test(id) || !["enroll", "session"].includes(purpose)) return json({ error: "invalid_request" }, 400);
+    if (!isObject(body)) return json({ error: "invalid_request" }, 400);
+    const id = body.installId;
+    const purpose = body.purpose;
+    if (!validInstallId(id) || !["enroll", "session"].includes(purpose)) return json({ error: "invalid_request" }, 400);
     if (purpose === "enroll" && !await rateLimit(env.ENROLL_LIMITER, "global-enrollment-challenge")) return json({ error: "rate_limited" }, 429);
     if (purpose === "session") {
       const record = await useDeviceStore(env, id, "get");
@@ -431,8 +443,10 @@ async function authRoutes(request, env, url) {
     if (!await rateLimit(env.ENROLL_LIMITER, "enroll:" + ip)) return json({ error: "rate_limited" }, 429);
     if (!await rateLimit(env.ENROLL_LIMITER, "global-enrollment")) return json({ error: "rate_limited" }, 429);
     let body; try { body = await request.json(); } catch { return json({ error: "invalid_request" }, 400); }
-    const id = String(body.installId || ""), nonce = String(body.nonce || ""), pub = String(body.publicKey || ""), sig = String(body.signature || "");
-    if (!/^[0-9a-f-]{36}$/i.test(id) || nonce.length < 30 || pub.length > 1000 || sig.length > 300) return json({ error: "invalid_request" }, 400);
+    if (!isObject(body)) return json({ error: "invalid_request" }, 400);
+    const { installId: id, nonce, publicKey: pub, signature: sig } = body;
+    if (!validInstallId(id) || !validNonce(nonce) || typeof pub !== "string" || pub.length < 80 || pub.length > 1000 ||
+        typeof sig !== "string" || sig.length < 80 || sig.length > 300) return json({ error: "invalid_request" }, 400);
     const challenge = await useChallengeStore(env, nonce, "consume", { installId: id, purpose: "enroll" });
     if (!challenge.ok) return json({ error: "authentication_failed" }, 401);
     if (!await verifyDeviceSignature(pub, sig, "enroll|" + id + "|" + nonce)) return json({ error: "authentication_failed" }, 401);
@@ -444,7 +458,11 @@ async function authRoutes(request, env, url) {
     if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
     if (!await rateLimit(env.ENROLL_LIMITER, "session:" + ip)) return json({ error: "rate_limited" }, 429);
     let body; try { body = await request.json(); } catch { return json({ error: "invalid_request" }, 400); }
-    const id = String(body.installId || ""), nonce = String(body.nonce || ""), sig = String(body.signature || "");
+    if (!isObject(body)) return json({ error: "invalid_request" }, 400);
+    const { installId: id, nonce, signature: sig } = body;
+    if (!validInstallId(id) || !validNonce(nonce) || typeof sig !== "string" || sig.length < 80 || sig.length > 300) {
+      return json({ error: "invalid_request" }, 400);
+    }
     const challenge = await useChallengeStore(env, nonce, "consume", { installId: id, purpose: "session" });
     const storedDevice = await useDeviceStore(env, id, "get");
     const device = storedDevice && storedDevice.device;
