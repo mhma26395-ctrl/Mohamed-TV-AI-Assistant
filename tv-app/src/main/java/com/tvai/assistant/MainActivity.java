@@ -198,9 +198,6 @@ public class MainActivity extends Activity {
         TextView foot = label("Version 0.6.3 · Voice replies can be toggled. Remote key mapping needs supported Accessibility key filtering.");
         foot.setTextSize(13);
         root.addView(foot);
-        /* Results are intentionally placed above the input and voice controls. */
-        /* Version footer follows the controls. */
-        /*
         if (micButton != null) micButton.requestFocus();
     }
 
