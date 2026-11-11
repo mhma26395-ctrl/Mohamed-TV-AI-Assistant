@@ -19,7 +19,25 @@ android {
         versionName '0.6.9'
         buildConfigField 'String', 'BACKEND_BASE_URL', '"https://mohamed-tv-ai-backend.mhma26395.workers.dev"'
     }
+    signingConfigs {
+        release {
+            def storePath = System.getenv('RELEASE_STORE_FILE')
+            def storePass = System.getenv('RELEASE_STORE_PASSWORD')
+            def keyAliasValue = System.getenv('RELEASE_KEY_ALIAS')
+            def keyPass = System.getenv('RELEASE_KEY_PASSWORD')
+            if (storePath && storePass && keyAliasValue && keyPass) {
+                storeFile file(storePath)
+                storePassword storePass
+                keyAlias keyAliasValue
+                keyPassword keyPass
+            }
+        }
+    }
     buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
         debug {
             // Debug builds are isolated from production device records and API secrets.
             buildConfigField 'String', 'BACKEND_BASE_URL', '"https://mohamed-tv-ai-backend-staging.mhma26395.workers.dev"'
