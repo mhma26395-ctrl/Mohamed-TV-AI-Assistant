@@ -501,7 +501,7 @@ public class MainActivity extends Activity {
                         for (int i = 0; i < items.length() && i < 8; i++) {
                             JSONObject item = items.optJSONObject(i);
                             if (item == null) continue;
-                            animeText.append("\\n\\n").append(i + 1).append(". ").append(item.optString("title", "بدون عنوان"));
+                            animeText.append("\n\n").append(i + 1).append(". ").append(item.optString("title", "بدون عنوان"));
                             String year = item.optString("year", "");
                             String kind = item.optString("type", "");
                             if (!year.isEmpty() || !kind.isEmpty()) animeText.append(" · ").append(kind).append(year.isEmpty() ? "" : " · " + year);
