@@ -9,11 +9,11 @@ android {
     namespace 'com.tvai.assistant'
     compileSdk 35
     defaultConfig {
-        applicationId 'com.tvai.assistant'
+        applicationId 'com.tvai.assistant.next'
         minSdk 26
         targetSdk 28
-        versionCode 14
-        versionName '0.6.2'
+        versionCode 22
+        versionName '0.6.2-rollback'
     }
     signingConfigs {
         debug {
@@ -23,7 +23,25 @@ android {
             keyPassword 'android'
         }
     }
+    signingConfigs {
+        release {
+            def storePath = System.getenv('RELEASE_STORE_FILE')
+            def storePass = System.getenv('RELEASE_STORE_PASSWORD')
+            def keyAliasValue = System.getenv('RELEASE_KEY_ALIAS')
+            def keyPass = System.getenv('RELEASE_KEY_PASSWORD')
+            if (storePath && storePass && keyAliasValue && keyPass) {
+                storeFile file(storePath)
+                storePassword storePass
+                keyAlias keyAliasValue
+                keyPassword keyPass
+            }
+        }
+    }
     buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
         debug {
             signingConfig signingConfigs.debug
         }
