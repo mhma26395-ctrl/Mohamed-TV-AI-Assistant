@@ -25,7 +25,7 @@ jobs:
       - name: Checkout release branch
         uses: actions/checkout@v4
         with:
-          ref: test/compact-scroll-fix
+          ref: restore/previous-working
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
