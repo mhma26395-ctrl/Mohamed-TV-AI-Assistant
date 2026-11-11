@@ -302,6 +302,41 @@ export async function getGoldInfo(currency, fetcher = fetch) {
   }
 }
 
+
+export async function getAnimeInfo(query, locale, fetcher = fetch) {
+  const search = String(query || "").trim().slice(0, 100);
+  const endpoint = search
+    ? "https://api.jikan.moe/v4/anime?q=" + encodeURIComponent(search) + "&limit=8&sfw=true&order_by=score&sort=desc"
+    : "https://api.jikan.moe/v4/top/anime?limit=8&filter=bypopularity&sfw=true";
+  const response = await fetcher(endpoint, {
+    signal: AbortSignal.timeout(12000),
+    headers: { "accept": "application/json" }
+  });
+  if (response.status === 429) throw new Error("anime_provider_rate_limited");
+  if (!response.ok) throw new Error("anime_provider_unavailable");
+  const payload = await response.json();
+  const items = Array.isArray(payload.data) ? payload.data : [];
+  const anime = items.slice(0, 8).map(item => ({
+    id: Number(item.mal_id) || null,
+    title: item.title || item.title_english || "Untitled",
+    englishTitle: item.title_english || null,
+    type: item.type || null,
+    year: item.year || (item.aired?.from ? String(item.aired.from).slice(0, 4) : null),
+    episodes: Number.isFinite(item.episodes) ? item.episodes : null,
+    score: Number.isFinite(item.score) ? item.score : null,
+    synopsis: String(item.synopsis || "").slice(0, 700),
+    image: item.images?.jpg?.image_url || null,
+    url: item.url || null,
+    genres: Array.isArray(item.genres) ? item.genres.map(g => g.name).slice(0, 5) : []
+  }));
+  return {
+    ok: true, type: "anime", query: search || null, anime,
+    count: anime.length, source: "Jikan API v4 (unofficial MyAnimeList data)",
+    fetchedAt: new Date().toISOString(),
+    note: "Metadata and rankings are supplied by Jikan/MyAnimeList sources; titles, scores and availability may change."
+  };
+}
+
 const SPORTS_LEAGUES = {
   "egyptian-premier-league": { code: "egy.1", name: "الدوري المصري" },
   "saudi-pro-league": { code: "sau.1", name: "الدوري السعودي" },
@@ -309,11 +344,12 @@ const SPORTS_LEAGUES = {
   "spanish-la-liga": { code: "esp.1", name: "الدوري الإسباني" }
 };
 
-async function getSportsInfo(leagueKey, dateValue, locale) {
+async function getSportsInfo(leagueKey, dateValue, locale, timezoneValue) {
   const league = SPORTS_LEAGUES[leagueKey];
   if (!league) return { ok: false, error: "unsupported_league" };
+  const timezone = resolveTimezone(timezoneValue || "Africa/Cairo") || "Africa/Cairo";
   const date = /^\\d{8}$/.test(String(dateValue || "")) ? String(dateValue) :
-    new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" })
+    new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" })
       .format(new Date()).replace(/-/g, "");
   const url = "https://site.api.espn.com/apis/site/v2/sports/soccer/" +
     league.code + "/scoreboard?dates=" + date;
@@ -342,7 +378,7 @@ async function getSportsInfo(leagueKey, dateValue, locale) {
   }).filter(x => x.homeTeam !== "غير معروف" && x.awayTeam !== "غير معروف");
   return {
     ok: true, type: "sports", league: league.name, leagueCode: league.code,
-    date, matches, count: matches.length,
+    date, timezone, matches, count: matches.length,
     source: "ESPN public scoreboard endpoint",
     note: "Unofficial public feed; coverage may vary by competition. Empty results do not prove that no match exists."
   };
@@ -759,10 +795,17 @@ export default {
 
     if (url.pathname === "/v1/info") {
       const infoBody = body;
-      if (!infoBody || !["time", "weather", "currency", "gold", "news", "sports"].includes(infoBody.type) ||
+      if (!infoBody || !["time", "weather", "currency", "gold", "news", "sports", "anime"].includes(infoBody.type) ||
           (["time", "weather", "news"].includes(infoBody.type) && (!infoBody.location || typeof infoBody.location !== "string" || !infoBody.location.trim() || infoBody.location.length > 100)) ||
           (infoBody.type === "sports" && (typeof infoBody.league !== "string" || !Object.prototype.hasOwnProperty.call(SPORTS_LEAGUES, infoBody.league) ||
             (infoBody.date != null && (typeof infoBody.date !== "string" || !/^\\d{8}$/.test(infoBody.date)))))) {
+        return json({ error: "invalid_info_request" }, 400);
+      }
+      if (infoBody.type === "anime" && (infoBody.query != null && (typeof infoBody.query !== "string" || infoBody.query.length > 100))) {
+        return json({ error: "invalid_info_request" }, 400);
+      }
+      if (infoBody.type === "sports" && infoBody.timezone != null &&
+          (typeof infoBody.timezone !== "string" || infoBody.timezone.length > 64 || !resolveTimezone(infoBody.timezone))) {
         return json({ error: "invalid_info_request" }, 400);
       }
       try {
@@ -775,8 +818,10 @@ export default {
               : infoBody.type === "gold"
                 ? await getGoldInfo(infoBody.currency || "EGP")
                 : infoBody.type === "sports"
-                  ? await getSportsInfo(infoBody.league, infoBody.date, infoBody.locale)
-                  : await getNewsInfo(infoBody.location, infoBody.locale);
+                  ? await getSportsInfo(infoBody.league, infoBody.date, infoBody.locale, infoBody.timezone)
+                  : infoBody.type === "anime"
+                    ? await getAnimeInfo(infoBody.query, infoBody.locale)
+                    : await getNewsInfo(infoBody.location, infoBody.locale);
         return json(data, data.ok ? 200 : 404);
       } catch (error) {
         return json({ ok: false, error: "live_info_unavailable", detail: error?.message || "provider_error" }, 502);
