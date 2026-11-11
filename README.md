@@ -2,6 +2,14 @@
 
 Arabic/English voice assistant for Android TV and Google TV, with a planned Android phone companion controller.
 
+## ☕ Buy the project a coffee
+
+Enjoying the app? If you'd like to help support its continued development, you can **buy us a coffee** with a small, completely optional contribution through PayPal. Every bit of support is appreciated!
+
+[![☕ Buy me a coffee](https://img.shields.io/badge/☕_Buy_the_project_a_coffee-Support_on_PayPal-0070BA?style=for-the-badge)](https://www.paypal.com/qrcodes/p2pqrc/VV4EEWFUZ8FCU)
+
+No payment is required to use the app. Thank you for your support ❤️
+
 ## Project status
 
 The repository contains the TV application source and a Cloudflare Worker backend. The phone companion has been selected as the next product direction and its security/transport architecture is documented in [Phone Companion Architecture](docs/PHONE-COMPANION-ARCHITECTURE.md). The phone app is **not implemented or available as an APK yet**.
