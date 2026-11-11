@@ -37,6 +37,10 @@ android {
             }
         }
     }
+    lint {
+        // This sideloaded rollback build intentionally preserves the legacy target SDK.
+        disable += 'ExpiredTargetSdkVersion'
+    }
     buildTypes {
         release {
             minifyEnabled false
