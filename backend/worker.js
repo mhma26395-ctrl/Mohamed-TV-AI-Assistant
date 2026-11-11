@@ -348,7 +348,7 @@ async function getSportsInfo(leagueKey, dateValue, locale, timezoneValue) {
   const league = SPORTS_LEAGUES[leagueKey];
   if (!league) return { ok: false, error: "unsupported_league" };
   const timezone = resolveTimezone(timezoneValue || "Africa/Cairo") || "Africa/Cairo";
-  const date = /^\\d{8}$/.test(String(dateValue || "")) ? String(dateValue) :
+  const date = /^\d{8}$/.test(String(dateValue || "")) ? String(dateValue) :
     new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" })
       .format(new Date()).replace(/-/g, "");
   const url = "https://site.api.espn.com/apis/site/v2/sports/soccer/" +
@@ -798,7 +798,7 @@ export default {
       if (!infoBody || !["time", "weather", "currency", "gold", "news", "sports", "anime"].includes(infoBody.type) ||
           (["time", "weather", "news"].includes(infoBody.type) && (!infoBody.location || typeof infoBody.location !== "string" || !infoBody.location.trim() || infoBody.location.length > 100)) ||
           (infoBody.type === "sports" && (typeof infoBody.league !== "string" || !Object.prototype.hasOwnProperty.call(SPORTS_LEAGUES, infoBody.league) ||
-            (infoBody.date != null && (typeof infoBody.date !== "string" || !/^\\d{8}$/.test(infoBody.date)))))) {
+            (infoBody.date != null && (typeof infoBody.date !== "string" || !/^\d{8}$/.test(infoBody.date)))))) {
         return json({ error: "invalid_info_request" }, 400);
       }
       if (infoBody.type === "anime" && (infoBody.query != null && (typeof infoBody.query !== "string" || infoBody.query.length > 100))) {
