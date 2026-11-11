@@ -403,7 +403,11 @@ public class MainActivity extends Activity {
         boolean asksGold = has(normalized, "الذهب", "سعر الذهب", "gold price", "gold rate");
         boolean asksCurrency = has(normalized, "سعر الدولار", "الدولار اليوم", "سعر العمله", "سعر العملات", "exchange rate", "currency rate", "usd egp", "dollar today");
         boolean asksNews = has(normalized, "الاخبار", "اخبار", "اخر الاخبار", "news", "headlines");
-        if (!asksTime && !asksWeather && !asksGold && !asksCurrency && !asksNews) return false;
+        boolean asksSports = has(normalized, "مباريات", "مباراه", "مباراة", "جدول مباريات",
+                "مواعيد المباريات", "ماتشات", "ماتش", "الدوري المصري", "الدوري السعودي",
+                "الدوري الانجليزي", "الدوري الإنجليزي", "الدوري الاسباني", "الدوري الإسباني",
+                "premier league", "la liga", "saudi pro league", "fixtures", "football matches");
+        if (!asksTime && !asksWeather && !asksGold && !asksCurrency && !asksNews && !asksSports) return false;
 
         String city = detectInfoCity(normalized);
         if (asksNews && city.isEmpty()) {
@@ -417,8 +421,20 @@ public class MainActivity extends Activity {
             return true;
         }
 
-        final String type = asksWeather ? "weather" : asksTime ? "time" : asksGold ? "gold" : asksCurrency ? "currency" : "news";
+        String selectedLeague = "";
+        if (asksSports) {
+            if (has(normalized, "المصري", "egyptian")) selectedLeague = "egyptian-premier-league";
+            else if (has(normalized, "السعودي", "saudi")) selectedLeague = "saudi-pro-league";
+            else if (has(normalized, "الاسباني", "الإسباني", "la liga", "laliga")) selectedLeague = "spanish-la-liga";
+            else if (has(normalized, "الانجليزي", "الإنجليزي", "premier league", "epl")) selectedLeague = "english-premier-league";
+            else {
+                reply("حدد الدوري المطلوب: المصري أو السعودي أو الإنجليزي أو الإسباني.");
+                return true;
+            }
+        }
+        final String type = asksSports ? "sports" : asksWeather ? "weather" : asksTime ? "time" : asksGold ? "gold" : asksCurrency ? "currency" : "news";
         final String queryLocation = city;
+        final String sportsLeague = selectedLeague;
         setStatus("جاري جلب المعلومات من مصدر مباشر…");
         network.execute(() -> {
             HttpURLConnection connection = null;
@@ -434,6 +450,11 @@ public class MainActivity extends Activity {
                 JSONObject payload = new JSONObject();
                 payload.put("type", type);
                 payload.put("locale", speechLanguage);
+                if ("sports".equals(type)) {
+                    payload.put("league", sportsLeague);
+                    java.text.SimpleDateFormat dayFormat = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US);
+                    payload.put("date", dayFormat.format(new java.util.Date()));
+                }
                 if ("time".equals(type) || "weather".equals(type) || "news".equals(type)) payload.put("location", queryLocation);
                 if ("currency".equals(type)) { payload.put("from", "USD"); payload.put("to", "EGP"); }
                 if ("gold".equals(type)) payload.put("currency", "EGP");
@@ -463,6 +484,31 @@ public class MainActivity extends Activity {
                 } else if ("time".equals(type)) {
                     answer = "الوقت الآن في " + queryLocation + ": " + result.optString("localDateTime") +
                             "\nالمنطقة الزمنية: " + result.optString("timezone");
+                } else if ("sports".equals(type)) {
+                    JSONArray matches = result.optJSONArray("matches");
+                    if (matches == null || matches.length() == 0) {
+                        answer = "لم يعرض مصدر النتائج مباريات لهذا الدوري في تاريخ اليوم. قد تكون لا توجد مباريات أو أن تغطية المصدر لهذا الدوري غير مكتملة. المصدر: ESPN.";
+                    } else {
+                        StringBuilder sportsText = new StringBuilder("مباريات " + result.optString("league") + " اليوم:\\n");
+                        for (int i = 0; i < matches.length() && i < 15; i++) {
+                            JSONObject match = matches.optJSONObject(i);
+                            if (match == null) continue;
+                            String kickoff = match.optString("dateTime", "");
+                            try {
+                                java.time.Instant instant = java.time.Instant.parse(kickoff);
+                                kickoff = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+                                        .withZone(java.time.ZoneId.systemDefault()).format(instant);
+                            } catch (Exception ignored) { kickoff = "موعد غير متاح"; }
+                            String score = match.isNull("homeScore") || match.isNull("awayScore")
+                                    ? "" : " (" + match.optString("homeScore") + " - " + match.optString("awayScore") + ")";
+                            sportsText.append("• ").append(match.optString("homeTeam")).append(" × ")
+                                    .append(match.optString("awayTeam")).append(score)
+                                    .append(" · ").append(kickoff).append(" · ")
+                                    .append(match.optString("status")).append("\\n");
+                        }
+                        sportsText.append("المصدر: ESPN. قد تختلف التغطية حسب الدوري.");
+                        answer = sportsText.toString().trim();
+                    }
                 } else if ("currency".equals(type)) {
                     answer = "سعر الصرف المرجعي: 1 " + result.optString("from") + " = " + result.optString("rate") + " " + result.optString("to") +
                             "\nتاريخ السعر: " + result.optString("date") + "\nالمصدر: Frankfurter. قد تختلف أسعار البنوك والسوق النقدية.";
