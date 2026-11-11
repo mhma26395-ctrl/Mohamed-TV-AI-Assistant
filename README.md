@@ -34,6 +34,10 @@ The artifact is temporary and expires according to the workflow retention settin
 
 The selected phone app is a **remote companion for the TV assistant**. It will provide QR pairing, remote controls, command input, and TV response/status display. The TV remains responsible for executing TV operations. See [the architecture and implementation checklist](docs/PHONE-COMPANION-ARCHITECTURE.md).
 
+## License
+
+This project is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the full license text. Third-party components remain subject to their respective licenses and notices.
+
 ## Contributing and release status
 
 The source is under active development. Features marked planned or in-progress are not guaranteed to work. Consult the roadmap and test results before relying on any feature. No independent security certification is claimed.
