@@ -60,19 +60,23 @@ jobs:
       - name: Build signed production APK
         run: gradle assembleRelease
 
-      - name: Verify APK exists
-        run: test -s tv-app/build/outputs/apk/release/tv-app-release.apk
+      - name: Locate release APK
+        run: |
+          APK_PATH=$(find tv-app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)
+          test -n "$APK_PATH"
+          test -s "$APK_PATH"
+          echo "RELEASE_APK=$APK_PATH" >> "$GITHUB_ENV"
 
       - name: Verify APK signature
         run: |
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
           test -n "$APKSIGNER"
-          "$APKSIGNER" verify --verbose tv-app/build/outputs/apk/release/tv-app-release.apk
+          "$APKSIGNER" verify --verbose "$RELEASE_APK"
 
       - name: Upload signed release APK
         uses: actions/upload-artifact@v4
         with:
           name: Mohamed-TV-AI-Assistant-0.6.9-release
-          path: tv-app/build/outputs/apk/release/tv-app-release.apk
+          path: ${{ env.RELEASE_APK }}
           if-no-files-found: error
           retention-days: 30
