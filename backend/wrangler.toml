@@ -105,3 +105,8 @@ new_sqlite_classes = ["AuthChallengeStore", "AuthDeviceStore"]
 [[env.staging.migrations]]
 tag = "security-telemetry-staging-v1"
 new_sqlite_classes = ["SecurityEventStore"]
+
+# Cloudflare Workers Builds runs `wrangler preview` for pull-request branches.
+# Keep this empty until isolated Preview bindings and secrets are provisioned;
+# never inherit or point Preview traffic at production resources.
+previews = { }
