@@ -2,6 +2,9 @@ name = "mohamed-tv-ai-backend"
 main = "worker.js"
 compatibility_date = "2026-11-10"
 
+# Isolated Worker Preview configuration (top-level, not nested under migrations).
+previews = { }
+
 [vars]
 # Model ID is configurable without changing the Android app.
 # This is the selected starting model; confirm the account's free-tier quota before public use.
@@ -106,7 +109,3 @@ new_sqlite_classes = ["AuthChallengeStore", "AuthDeviceStore"]
 tag = "security-telemetry-staging-v1"
 new_sqlite_classes = ["SecurityEventStore"]
 
-# Cloudflare Workers Builds runs `wrangler preview` for pull-request branches.
-# Keep this empty until isolated Preview bindings and secrets are provisioned;
-# never inherit or point Preview traffic at production resources.
-previews = { }
