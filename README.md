@@ -8,6 +8,14 @@ The repository contains the TV application source and a Cloudflare Worker backen
 
 The tested Android TV / Google TV APK is **0.6.9** (versionCode 21). The signed APK was built and signature-verified in GitHub Actions run [43003494402](https://github.com/mhma26395-ctrl/Mohamed-TV-AI-Assistant/actions/runs/43003494402). The release workflow can publish that exact tested artifact as a GitHub Release.
 
+## Support the project
+
+If you find Mohamed TV AI Assistant useful and would like to support its development, you can send a voluntary contribution through PayPal:
+
+**[Support Mohamed TV AI Assistant via PayPal](https://www.paypal.com/qrcodes/p2pqrc/VV4EEWFUZ8FCU)**
+
+The PayPal QR code supplied for this project displays the recipient name **Ali Mostafa**. Contributions are voluntary and are not required to use the app.
+
 ## Main components
 
 - `tv-app/`: Android TV / Google TV app. TV-side permissions and device operations remain on the television.
