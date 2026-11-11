@@ -7,6 +7,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -14,6 +15,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 public class CompactAssistantActivity extends MainActivity {
+    private ScrollView answerScroll;
     @Override protected void buildUi() {
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
@@ -45,10 +47,12 @@ public class CompactAssistantActivity extends MainActivity {
         transcript.setVisibility(View.GONE);
         panel.addView(transcript);
         // Keep the compact window, but make the complete answer reachable with the TV remote.
-        ScrollView answerScroll = new ScrollView(this);
+        answerScroll = new ScrollView(this);
         answerScroll.setFillViewport(true);
         answerScroll.setFocusable(true);
         answerScroll.setFocusableInTouchMode(true);
+        answerScroll.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+        answerScroll.setContentDescription("منطقة إجابة المساعد. استخدم السهمين لأعلى وأسفل لقراءة بقية الإجابة");
         answerScroll.setVerticalScrollBarEnabled(true);
         answerScroll.setSmoothScrollingEnabled(true);
         int answerHeight = (int)(getResources().getDisplayMetrics().density * 230);
@@ -67,7 +71,7 @@ public class CompactAssistantActivity extends MainActivity {
         answerScroll.addView(response, new ScrollView.LayoutParams(
                 ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
         answerScroll.setOnKeyListener((v, keyCode, event) -> {
-            if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return true;
+            if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return false;
             if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
                 answerScroll.smoothScrollBy(0, (int)(150 * getResources().getDisplayMetrics().density));
                 return true;
@@ -112,6 +116,8 @@ public class CompactAssistantActivity extends MainActivity {
         panel.addView(actions);
 
         setContentView(panel);
+        // Keep D-pad focus on the scroll container so UP/DOWN always scroll the answer first.
+        answerScroll.requestFocus();
     }
 
     @Override protected void reply(String message) {
@@ -135,6 +141,11 @@ public class CompactAssistantActivity extends MainActivity {
         p.y = 90;
         getWindow().setAttributes(p);
         getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+    }
+
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && answerScroll != null) answerScroll.requestFocus();
     }
 
     @Override public void onBackPressed() {
