@@ -750,7 +750,7 @@ public class MainActivity extends Activity {
                 JSONObject payload = new JSONObject();
                 // App inventory is useful for app-specific commands, but wastes input tokens on unrelated questions.
                 String normalizedContextRequest = normalize(contextualMessage);
-                boolean needsAppInventory = has(normalizedRequest,
+                boolean needsAppInventory = has(normalizedContextRequest,
                         "افتح", "شغل", "تشغيل", "تطبيق", "التطبيقات", "برنامج", "برامج",
                         "مثبت", "مثبته", "صلاحيات", "اذونات", "فحص التطبيقات", "مراجعه التطبيقات",
                         "app", "apps", "installed", "launch", "package", "audit");
