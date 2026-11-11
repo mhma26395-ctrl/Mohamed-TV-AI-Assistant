@@ -10,6 +10,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 public class CompactAssistantActivity extends MainActivity {
@@ -43,15 +44,57 @@ public class CompactAssistantActivity extends MainActivity {
         transcript = new TextView(this);
         transcript.setVisibility(View.GONE);
         panel.addView(transcript);
+        // Keep the compact window, but make the complete answer reachable with the TV remote.
+        ScrollView answerScroll = new ScrollView(this);
+        answerScroll.setFillViewport(true);
+        answerScroll.setFocusable(true);
+        answerScroll.setFocusableInTouchMode(true);
+        answerScroll.setVerticalScrollBarEnabled(true);
+        answerScroll.setSmoothScrollingEnabled(true);
+        int answerHeight = (int)(getResources().getDisplayMetrics().density * 230);
+        answerScroll.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, answerHeight));
         response = new TextView(this);
         response.setText("تحدث لإعطاء أمر للتلفزيون");
         response.setTextColor(Color.WHITE);
-        response.setTextSize(15);
-        response.setGravity(Gravity.CENTER);
+        response.setTextSize(16);
+        response.setGravity(Gravity.TOP | Gravity.RIGHT);
         response.setTextDirection(View.TEXT_DIRECTION_FIRST_STRONG);
-        response.setMaxLines(5);
-        response.setPadding(6, 4, 6, 8);
-        panel.addView(response);
+        response.setMaxLines(Integer.MAX_VALUE);
+        response.setSingleLine(false);
+        response.setFocusable(false);
+        response.setPadding(8, 8, 8, 12);
+        answerScroll.addView(response, new ScrollView.LayoutParams(
+                ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
+        answerScroll.setOnKeyListener((v, keyCode, event) -> {
+            if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return true;
+            if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
+                answerScroll.smoothScrollBy(0, (int)(150 * getResources().getDisplayMetrics().density));
+                return true;
+            }
+            if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
+                answerScroll.smoothScrollBy(0, -(int)(150 * getResources().getDisplayMetrics().density));
+                return true;
+            }
+            return false;
+        });
+        panel.addView(answerScroll);
+
+        LinearLayout answerControls = new LinearLayout(this);
+        answerControls.setGravity(Gravity.CENTER);
+        Button answerUp = new Button(this);
+        answerUp.setText("↑ أعلى");
+        answerUp.setAllCaps(false);
+        answerUp.setOnClickListener(v -> answerScroll.smoothScrollBy(0,
+                -(int)(180 * getResources().getDisplayMetrics().density)));
+        answerControls.addView(answerUp, new LinearLayout.LayoutParams(0, -2, 1));
+        Button answerDown = new Button(this);
+        answerDown.setText("↓ باقي الإجابة");
+        answerDown.setAllCaps(false);
+        answerDown.setOnClickListener(v -> answerScroll.smoothScrollBy(0,
+                (int)(180 * getResources().getDisplayMetrics().density)));
+        answerControls.addView(answerDown, new LinearLayout.LayoutParams(0, -2, 1));
+        panel.addView(answerControls);
 
         LinearLayout actions = new LinearLayout(this);
         actions.setGravity(Gravity.CENTER);
@@ -76,7 +119,7 @@ public class CompactAssistantActivity extends MainActivity {
         if (response != null) {
             boolean arabic = message != null && message.matches("(?s).*[\\u0600-\\u06FF].*");
             response.setTextDirection(arabic ? View.TEXT_DIRECTION_FIRST_STRONG_RTL : View.TEXT_DIRECTION_FIRST_STRONG_LTR);
-            response.setGravity(arabic ? Gravity.RIGHT : Gravity.LEFT);
+            response.setGravity(arabic ? Gravity.TOP | Gravity.RIGHT : Gravity.TOP | Gravity.LEFT);
         }
     }
 
@@ -85,7 +128,8 @@ public class CompactAssistantActivity extends MainActivity {
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
         WindowManager.LayoutParams p = getWindow().getAttributes();
         p.width = (int)(getResources().getDisplayMetrics().density * 420);
-        p.height = WindowManager.LayoutParams.WRAP_CONTENT;
+        p.height = (int)(getResources().getDisplayMetrics().density * 520);
+        p.height = Math.min(p.height, getResources().getDisplayMetrics().heightPixels - (int)(40 * getResources().getDisplayMetrics().density));
         p.gravity = Gravity.TOP | Gravity.END;
         p.x = 22;
         p.y = 90;
