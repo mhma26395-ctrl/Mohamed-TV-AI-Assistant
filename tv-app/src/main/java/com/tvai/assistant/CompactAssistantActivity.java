@@ -48,6 +48,7 @@ public class CompactAssistantActivity extends MainActivity {
         panel.addView(transcript);
 
         answerScroll = new ScrollView(this);
+        answerScroll.setId(View.generateViewId());
         answerScroll.setFillViewport(true);
         answerScroll.setFocusable(true);
         answerScroll.setFocusableInTouchMode(true);
@@ -96,6 +97,7 @@ public class CompactAssistantActivity extends MainActivity {
         LinearLayout answerControls = new LinearLayout(this);
         answerControls.setGravity(Gravity.CENTER);
         answerUp = new Button(this);
+        answerUp.setId(View.generateViewId());
         answerUp.setText("↑ أعلى");
         answerUp.setAllCaps(false);
         answerUp.setOnClickListener(v -> answerScroll.smoothScrollBy(0,
@@ -103,6 +105,7 @@ public class CompactAssistantActivity extends MainActivity {
         answerControls.addView(answerUp, new LinearLayout.LayoutParams(0, -2, 1));
 
         answerDown = new Button(this);
+        answerDown.setId(View.generateViewId());
         answerDown.setText("↓ باقي الإجابة");
         answerDown.setAllCaps(false);
         answerDown.setOnClickListener(v -> answerScroll.smoothScrollBy(0,
@@ -113,12 +116,14 @@ public class CompactAssistantActivity extends MainActivity {
         LinearLayout actions = new LinearLayout(this);
         actions.setGravity(Gravity.CENTER);
         mic = new Button(this);
+        mic.setId(View.generateViewId());
         mic.setText("🎙 تحدث");
         mic.setAllCaps(false);
         mic.setOnClickListener(v -> startListening());
         actions.addView(mic, new LinearLayout.LayoutParams(0, -2, 1));
 
         close = new Button(this);
+        close.setId(View.generateViewId());
         close.setText("إغلاق النافذة");
         close.setAllCaps(false);
         close.setOnClickListener(v -> finish());
