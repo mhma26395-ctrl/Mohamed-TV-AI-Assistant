@@ -2,7 +2,7 @@ name: Backend security source checks
 
 on:
   push:
-    branches: [main]
+    branches: [main, test/compact-scroll-fix]
     paths:
       - "backend/**"
       - ".github/workflows/backend-check.yml"
