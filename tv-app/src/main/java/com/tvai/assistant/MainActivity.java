@@ -788,7 +788,7 @@ public class MainActivity extends Activity {
                     String messageText = "تعذر الاتصال بالمساعد: " + error + " (" + code + ")";
                     if (code == 429 && "provider_rate_limited".equals(error)) {
                         messageText = "الخدمة مشغولة حاليًا بسبب حد الطلبات لدى مزود الذكاء الاصطناعي. انتظر قليلًا ثم حاول مرة واحدة.";
-                        if (!retryAfter.isEmpty() && !"null".equals(retryAfter)) messageText += " مدة الانتظار المقترحة: " + retryAfter + " ثانية.";
+                        if (!retryAfter.isEmpty() && !"null".equals(retryAfter)) messageText += " إشارة الانتظار من المزود: " + retryAfter + ".";
                     } else if (code == 429 && "rate_limited".equals(error)) {
                         messageText = "تم إرسال طلبات متقاربة جدًا. انتظر قليلًا ثم حاول مرة أخرى.";
                     }
