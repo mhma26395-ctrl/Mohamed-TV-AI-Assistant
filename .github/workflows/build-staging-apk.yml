@@ -1,0 +1,47 @@
+name: Build Staging Debug APK
+
+on:
+  push:
+    branches:
+      - test/compact-scroll-fix
+    paths:
+      - 'tv-app/**'
+      - '.github/workflows/build-staging-apk.yml'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle/**'
+      - 'gradlew'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/test/compact-scroll-fix'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout staging branch
+        uses: actions/checkout@v4
+        with:
+          ref: test/compact-scroll-fix
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        run: ./gradlew --no-daemon :tv-app:assembleDebug
+
+      - name: Upload staging debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mohamed-TV-AI-Assistant-currency-direct-staging-debug
+          path: tv-app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
