@@ -84,13 +84,17 @@ final class CompanionCommandValidator {
             long counter = request.getLong("counter");
             long issuedAt = request.getLong("issuedAt");
             if (counter < 1) return Result.reject("invalid_counter");
-            if (Math.abs(nowMs - issuedAt) > MAX_CLOCK_SKEW_MS)
+            // Range-check before subtraction to avoid overflow on hostile Long values.
+            if (issuedAt <= 0L || nowMs <= 0L
+                    || issuedAt < nowMs - MAX_CLOCK_SKEW_MS
+                    || issuedAt > nowMs + MAX_CLOCK_SKEW_MS)
                 return Result.reject("request_expired");
 
             String command = request.getString("command");
             JSONObject args = request.getJSONObject("args");
             String signature = request.getString("signature");
-            if (signature.length() < 80 || signature.length() > 160)
+            if (signature.length() < 80 || signature.length() > 160
+                    || !signature.matches("[A-Za-z0-9_-]+"))
                 return Result.reject("invalid_signature_format");
 
             String argsError = validateCommand(command, args);
@@ -124,7 +128,8 @@ final class CompanionCommandValidator {
             seenRequestIds.put(verifiedPhoneId, ids);
         }
         if (ids.contains(requestId)) return false;
-        if (ids.size() >= MAX_TRACKED_REQUESTS) ids.clear();
+        // Fail closed rather than clearing replay history and reopening old IDs.
+        if (ids.size() >= MAX_TRACKED_REQUESTS) return false;
         ids.add(requestId);
         lastCounters.put(verifiedPhoneId, counter);
         return true;
