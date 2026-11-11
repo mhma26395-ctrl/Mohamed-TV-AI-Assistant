@@ -70,6 +70,8 @@ public class MainActivity extends Activity {
     private Button ttsToggleButton;
     private EditText messageInput;
     private final ExecutorService network = Executors.newSingleThreadExecutor();
+    // Prevent duplicate AI requests from piling up when the user presses Send or the mic repeatedly.
+    private volatile boolean aiRequestInProgress = false;
     private static final String API_URL = BuildConfig.BACKEND_BASE_URL + "/v1/assistant";
     private static final String INFO_API_URL = BuildConfig.BACKEND_BASE_URL + "/v1/info";
     private static final int SHIZUKU_PERMISSION_REQUEST = 7301;
@@ -711,18 +713,24 @@ public class MainActivity extends Activity {
     }
 
     protected void sendToAi(String message) {
+        if (aiRequestInProgress) {
+            reply("هناك طلب جارٍ بالفعل. انتظر الرد الحالي قبل إرسال سؤال آخر / Please wait for the current answer before sending another request.");
+            return;
+        }
+        aiRequestInProgress = true;
         String normalizedRequest = normalize(message);
         final String originalMessage = message;
         final String contextualMessage = buildConversationContext(message);
-        if (tryHandleSleepTimerRequest(message, normalizedRequest)) return;
-        if (tryHandleLocalAudioCommand(normalizedRequest)) return;
-        if (tryHandleLiveInfo(message, normalizedRequest)) return;
-        if (tryHandleYouTubeSearch(message, normalizedRequest)) return;
+        if (tryHandleSleepTimerRequest(message, normalizedRequest)) { aiRequestInProgress = false; return; }
+        if (tryHandleLocalAudioCommand(normalizedRequest)) { aiRequestInProgress = false; return; }
+        if (tryHandleLiveInfo(message, normalizedRequest)) { aiRequestInProgress = false; return; }
+        if (tryHandleYouTubeSearch(message, normalizedRequest)) { aiRequestInProgress = false; return; }
         if (has(normalizedRequest,
                 "التطبيقات اللي شغاله في الخلفيه", "التطبيقات الشغاله في الخلفيه",
                 "تطبيقات الخلفيه", "ايه التطبيقات المفتوحه", "التطبيقات المفتوحه",
                 "background apps", "apps running in background", "which apps are running")) {
             reply(getRecentAppsReport());
+            aiRequestInProgress = false;
             return;
         }
         setStatus("Preparing request… / تجهيز الطلب…");
@@ -766,7 +774,16 @@ public class MainActivity extends Activity {
                 JSONObject result = new JSONObject(new String(buffer.toByteArray(), StandardCharsets.UTF_8));
                 if (code != 200) {
                     String error = result.optString("error", "http_" + code);
-                    runOnUiThread(() -> reply("تعذر الاتصال بالمساعد: " + error + " (" + code + ")"));
+                    String retryAfter = result.optString("retryAfter", "");
+                    String messageText = "تعذر الاتصال بالمساعد: " + error + " (" + code + ")";
+                    if (code == 429 && "provider_rate_limited".equals(error)) {
+                        messageText = "الخدمة مشغولة حاليًا بسبب حد الطلبات لدى مزود الذكاء الاصطناعي. انتظر قليلًا ثم حاول مرة واحدة.";
+                        if (!retryAfter.isEmpty() && !"null".equals(retryAfter)) messageText += " مدة الانتظار المقترحة: " + retryAfter + " ثانية.";
+                    } else if (code == 429 && "rate_limited".equals(error)) {
+                        messageText = "تم إرسال طلبات متقاربة جدًا. انتظر قليلًا ثم حاول مرة أخرى.";
+                    }
+                    final String userMessage = messageText;
+                    runOnUiThread(() -> reply(userMessage));
                     return;
                 }
                 String answer = result.optString("text", "");
@@ -802,6 +819,7 @@ public class MainActivity extends Activity {
                 }
             } finally {
                 if (connection != null) connection.disconnect();
+                aiRequestInProgress = false;
             }
         });
     }
