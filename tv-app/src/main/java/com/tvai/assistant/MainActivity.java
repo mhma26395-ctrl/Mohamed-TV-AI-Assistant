@@ -642,8 +642,32 @@ public class MainActivity extends Activity {
         }
     }
 
+    private boolean isContinuationRequest(String normalized) {
+        return has(normalized, "كمل", "اكمل", "تابع", "باقي الاجابه", "باقي الاجابة",
+                "كمل الاجابه", "كمل الإجابة", "تابع الاجابه", "تابع الإجابة",
+                "المزيد", "استكمل", "continue", "go on", "keep going", "more");
+    }
+
+    private String buildConversationContext(String message) {
+        if (!isContinuationRequest(normalize(message))) return message;
+        android.content.SharedPreferences history =
+                getSharedPreferences("assistant_conversation", MODE_PRIVATE);
+        String previousQuestion = history.getString("last_question", "");
+        String previousAnswer = history.getString("last_answer", "");
+        if (previousQuestion.trim().isEmpty() || previousAnswer.trim().isEmpty()) return message;
+        if (previousAnswer.length() > 6500)
+            previousAnswer = previousAnswer.substring(previousAnswer.length() - 6500);
+        return "FOLLOW_UP_TO_PREVIOUS_TURN. The user is asking you to continue the previous answer, NOT starting an unrelated new topic.\\n"
+                + "Previous user question: " + previousQuestion + "\\n"
+                + "Previous assistant answer so far: " + previousAnswer + "\\n"
+                + "Current user follow-up: " + message + "\\n"
+                + "Continue with the missing remaining information. Avoid repeating what was already answered unless needed for continuity.";
+    }
+
     protected void sendToAi(String message) {
         String normalizedRequest = normalize(message);
+        final String originalMessage = message;
+        final String contextualMessage = buildConversationContext(message);
         if (tryHandleSleepTimerRequest(message, normalizedRequest)) return;
         if (tryHandleLocalAudioCommand(normalizedRequest)) return;
         if (tryHandleLiveInfo(message, normalizedRequest)) return;
@@ -672,7 +696,7 @@ public class MainActivity extends Activity {
                 JSONObject payload = new JSONObject();
                 JSONArray installedApps = getInstalledLaunchableAppsJson();
                 StringBuilder appContext = new StringBuilder("\n\nACTUAL_INSTALLED_APPS_ON_THIS_TV. Use only exact packageName values below for launch_app; never guess package names. If the requested app is not listed, say so.\n");
-                int contextLimit = Math.max(0, 3800 - message.length());
+                int contextLimit = Math.max(0, 3800 - contextualMessage.length());
                 for (int i = 0; i < installedApps.length() && i < 80; i++) {
                     JSONObject app = installedApps.optJSONObject(i);
                     if (app == null) continue;
@@ -680,7 +704,7 @@ public class MainActivity extends Activity {
                     if (appContext.length() + line.length() > contextLimit) break;
                     appContext.append(line);
                 }
-                payload.put("message", message + appContext.toString());
+                payload.put("message", contextualMessage + appContext.toString());
                 stage = "sending_request";
                 runOnUiThread(() -> setStatus("Sending command… / إرسال الأمر…"));
                 try (OutputStream out = connection.getOutputStream()) {
@@ -702,8 +726,24 @@ public class MainActivity extends Activity {
                 String answer = result.optString("text", "");
                 JSONArray calls = result.optJSONArray("toolCalls");
                 runOnUiThread(() -> {
-                    if (!answer.isEmpty()) reply(answer);
-                    else if (calls == null || calls.length() == 0) reply("وصل الرد من الذكاء الاصطناعي دون أمر.");
+                    if (!answer.isEmpty()) {
+                        android.content.SharedPreferences history =
+                                getSharedPreferences("assistant_conversation", MODE_PRIVATE);
+                        boolean continuation = isContinuationRequest(normalize(originalMessage));
+                        String previousQuestion = history.getString("last_question", "");
+                        String previousAnswer = history.getString("last_answer", "");
+                        String savedQuestion = continuation && !previousQuestion.isEmpty()
+                                ? previousQuestion : originalMessage;
+                        String savedAnswer = continuation && !previousAnswer.isEmpty()
+                                ? previousAnswer + "\\n\\n" + answer : answer;
+                        if (savedAnswer.length() > 9000)
+                            savedAnswer = savedAnswer.substring(savedAnswer.length() - 9000);
+                        history.edit().putString("last_question", savedQuestion)
+                                .putString("last_answer", savedAnswer).apply();
+                        reply(answer);
+                    } else if (calls == null || calls.length() == 0) {
+                        reply("وصل الرد من الذكاء الاصطناعي دون أمر.");
+                    }
                     if (calls != null) executeAiTools(calls);
                 });
             } catch (Exception e) {
