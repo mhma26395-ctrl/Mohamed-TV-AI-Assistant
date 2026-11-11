@@ -136,7 +136,19 @@ const CITY_TIMEZONES = {
 };
 
 function cleanLocation(value) {
-  return String(value || "").trim().replace(/[؟?!.،,]+$/g, "").trim();
+  let city = String(value || "").trim().replace(/[؟?!.،,]+$/g, "").trim();
+  city = city.replace(/^(?:الطقس|حالة الطقس|الجو|الوقت|درجة الحرارة)\\s+/i, "");
+  city = city.replace(/^(?:في|بمدينة|مدينة|in)\\s+/i, "");
+  city = city.replace(/\\s+(?:في مصر|مصر|egypt|in egypt|السعودية|المملكة العربية السعودية|saudi arabia)$/i, "");
+  city = city.replace(/[؟?!.،,]+$/g, "").trim();
+  const normalized = city.toLowerCase().replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي");
+  const aliases = {
+    "الاسكندريه": "Alexandria", "اسكندريه": "Alexandria", "اسكندريه": "Alexandria",
+    "الاسكندرية": "Alexandria", "اسكندرية": "Alexandria",
+    "القاهره": "Cairo", "القاهرة": "Cairo",
+    "الجيزه": "Giza", "جيزه": "Giza"
+  };
+  return aliases[normalized] || city;
 }
 
 function resolveTimezone(location) {
@@ -151,15 +163,29 @@ function resolveTimezone(location) {
 }
 
 async function getTimeInfo(location, locale) {
-  const timezone = resolveTimezone(location);
-  if (!timezone) return { ok: false, error: "unknown_city_or_timezone", location };
+  let timezone = resolveTimezone(location);
+  let resolvedLocation = cleanLocation(location);
+  // If the input is a city rather than an IANA timezone, resolve it through
+  // the same global geocoder used by weather. No fixed city allow-list.
+  if (!timezone) {
+    const geoUrl = "https://geocoding-api.open-meteo.com/v1/search?name="
+      + encodeURIComponent(resolvedLocation) + "&count=1&language="
+      + (String(locale || "").startsWith("ar") ? "ar" : "en") + "&format=json";
+    const geoResponse = await fetch(geoUrl, { signal: AbortSignal.timeout(12000) });
+    if (!geoResponse.ok) throw new Error("time_geocoding_unavailable");
+    const geo = await geoResponse.json();
+    const place = geo.results?.[0];
+    if (!place?.timezone) return { ok: false, error: "unknown_city_or_timezone", location };
+    timezone = place.timezone;
+    resolvedLocation = [place.name, place.admin1, place.country].filter(Boolean).join(", ");
+  }
   const now = new Date();
   const formatted = new Intl.DateTimeFormat(locale || "ar-EG", {
     timeZone: timezone, hour: "numeric", minute: "2-digit", second: "2-digit",
     weekday: "long", year: "numeric", month: "long", day: "numeric",
     hour12: true, timeZoneName: "long"
   }).format(now);
-  return { ok: true, type: "time", location, timezone, localDateTime: formatted, timestamp: now.toISOString(), source: "IANA time zone database via Intl" };
+  return { ok: true, type: "time", location: resolvedLocation, timezone, localDateTime: formatted, timestamp: now.toISOString(), source: "Open-Meteo geocoding + IANA time zone database" };
 }
 
 function weatherDescription(code, locale) {
