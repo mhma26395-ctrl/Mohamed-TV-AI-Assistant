@@ -1,0 +1,56 @@
+name: Publish tested Mohamed TV AI Assistant release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download the already-tested signed APK artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist
+          gh run download 43003494402 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "Mohamed-TV-AI-Assistant-0.6.9-release" \
+            --dir dist
+          test -s dist/tv-app-release.apk
+
+      - name: Verify APK signature and calculate checksum
+        run: |
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose dist/tv-app-release.apk
+          sha256sum dist/tv-app-release.apk | tee dist/SHA256SUMS.txt
+
+      - name: Prepare release notes
+        run: |
+          cat > dist/RELEASE_NOTES.md <<'EOF'
+          # Mohamed TV AI Assistant 0.6.9
+
+          This release uses the tested signed APK from GitHub Actions run 43003494402.
+          The APK signature was verified during the original build and is verified again before publication.
+
+          ## Installation
+          Download `Mohamed-TV-AI-Assistant-0.6.9.apk` from the Assets section below and install it on a compatible Android TV / Google TV device.
+
+          ## Source
+          Source baseline: `restore/previous-working`.
+          This is an early-access community release. Compatibility depends on the TV firmware, permissions and backend availability.
+          EOF
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v0.6.9 dist/tv-app-release.apk#Mohamed-TV-AI-Assistant-0.6.9.apk dist/SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --target a775f38ab13811e6a893fa7ef9405c1b54433141 \
+            --title "Mohamed TV AI Assistant 0.6.9" \
+            --notes-file dist/RELEASE_NOTES.md
