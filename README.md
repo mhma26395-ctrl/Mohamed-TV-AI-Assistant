@@ -6,13 +6,21 @@ Arabic/English voice assistant for Android TV and Google TV, with a planned Andr
 
 The repository contains the TV application source and a Cloudflare Worker backend. The phone companion has been selected as the next product direction and its security/transport architecture is documented in [Phone Companion Architecture](docs/PHONE-COMPANION-ARCHITECTURE.md). The phone app is **not implemented or available as an APK yet**.
 
-The current TV source is version **0.6.9** (versionCode 21). The existing GitHub Actions workflow produces a temporary **debug APK artifact**, not a permanent signed release. Do not treat it as a production release.
+The tested Android TV / Google TV APK is **0.6.9** (versionCode 21). The signed APK was built and signature-verified in GitHub Actions run [43003494402](https://github.com/mhma26395-ctrl/Mohamed-TV-AI-Assistant/actions/runs/43003494402). The release workflow can publish that exact tested artifact as a GitHub Release.
 
 ## Main components
 
 - `tv-app/`: Android TV / Google TV app. TV-side permissions and device operations remain on the television.
 - `backend/`: Cloudflare Worker source for assistant and live-information APIs, including per-install device authentication.
 - `docs/`: implementation plans, security requirements, and validation gates.
+
+## License
+
+This project is licensed under the Apache License 2.0. See [LICENSE](LICENSE).
+
+## Published APK
+
+The signed APK is published under GitHub **Releases** when the maintainer runs **Publish tested Mohamed TV AI Assistant release** from the Actions tab. The workflow republishes the already-tested and signed artifact from run 43003494402; it does not rebuild or change the APK.
 
 ## Build the current TV debug APK
 
