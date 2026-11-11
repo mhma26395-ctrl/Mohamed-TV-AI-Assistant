@@ -439,43 +439,54 @@ public class MainActivity extends Activity {
         network.execute(() -> {
             HttpURLConnection connection = null;
             try {
-                // Currency lookup is intentionally independent of the authenticated Worker backend.
-                // Frankfurter is a free public reference-rate API and requires no API key.
+                // Currency lookup is independent of the authenticated Worker backend.
+                // Try the current Frankfurter host first, then its legacy host as a fallback.
                 if ("currency".equals(type)) {
-                    HttpURLConnection currencyConnection = null;
-                    try {
-                        URL currencyUrl = new URL("https://api.frankfurter.dev/v1/latest?base=USD&symbols=EGP");
-                        currencyConnection = (HttpURLConnection) currencyUrl.openConnection();
-                        currencyConnection.setRequestMethod("GET");
-                        currencyConnection.setConnectTimeout(12000);
-                        currencyConnection.setReadTimeout(15000);
-                        int currencyCode = currencyConnection.getResponseCode();
-                        if (currencyCode != HttpURLConnection.HTTP_OK) {
-                            throw new java.io.IOException("Currency provider HTTP " + currencyCode);
-                        }
-                        try (java.io.InputStream currencyStream = currencyConnection.getInputStream();
-                             java.io.ByteArrayOutputStream currencyBuffer = new java.io.ByteArrayOutputStream()) {
-                            byte[] currencyChunk = new byte[1024];
-                            int currencyCount;
-                            while ((currencyCount = currencyStream.read(currencyChunk)) != -1) {
-                                currencyBuffer.write(currencyChunk, 0, currencyCount);
+                    String[] currencyUrls = {
+                            "https://api.frankfurter.dev/v1/latest?base=USD&symbols=EGP",
+                            "https://api.frankfurter.app/latest?from=USD&to=EGP"
+                    };
+                    Exception lastCurrencyError = null;
+                    for (String currencyUrlText : currencyUrls) {
+                        HttpURLConnection currencyConnection = null;
+                        try {
+                            currencyConnection = (HttpURLConnection) new URL(currencyUrlText).openConnection();
+                            currencyConnection.setRequestMethod("GET");
+                            currencyConnection.setConnectTimeout(10000);
+                            currencyConnection.setReadTimeout(12000);
+                            currencyConnection.setInstanceFollowRedirects(true);
+                            currencyConnection.setRequestProperty("Accept", "application/json");
+                            int currencyCode = currencyConnection.getResponseCode();
+                            if (currencyCode != HttpURLConnection.HTTP_OK) {
+                                throw new java.io.IOException("Provider HTTP " + currencyCode);
                             }
-                            JSONObject currencyResult = new JSONObject(new String(currencyBuffer.toByteArray(), StandardCharsets.UTF_8));
-                            JSONObject rates = currencyResult.optJSONObject("rates");
-                            if (rates == null || !rates.has("EGP")) {
-                                throw new java.io.IOException("Currency provider returned no EGP rate");
+                            try (java.io.InputStream currencyStream = currencyConnection.getInputStream();
+                                 java.io.ByteArrayOutputStream currencyBuffer = new java.io.ByteArrayOutputStream()) {
+                                byte[] currencyChunk = new byte[1024];
+                                int currencyCount;
+                                while ((currencyCount = currencyStream.read(currencyChunk)) != -1) {
+                                    currencyBuffer.write(currencyChunk, 0, currencyCount);
+                                }
+                                JSONObject currencyResult = new JSONObject(new String(currencyBuffer.toByteArray(), StandardCharsets.UTF_8));
+                                JSONObject rates = currencyResult.optJSONObject("rates");
+                                if (rates == null || !rates.has("EGP")) {
+                                    throw new java.io.IOException("Provider response has no EGP rate");
+                                }
+                                String rate = rates.getString("EGP");
+                                String date = currencyResult.optString("date", "غير متاح");
+                                String directAnswer = "سعر الصرف المرجعي: 1 دولار أمريكي = " + rate + " جنيه مصري"
+                                        + "\\nتاريخ السعر: " + date
+                                        + "\\nالمصدر: Frankfurter (سعر مرجعي). قد تختلف أسعار البنوك والسوق النقدية.";
+                                runOnUiThread(() -> reply(directAnswer));
+                                return;
                             }
-                            String rate = rates.getString("EGP");
-                            String date = currencyResult.optString("date", "غير متاح");
-                            String directAnswer = "سعر الصرف المرجعي: 1 دولار أمريكي = " + rate + " جنيه مصري"
-                                    + "\\nتاريخ السعر: " + date
-                                    + "\\nالمصدر: Frankfurter (سعر مرجعي). قد تختلف أسعار البنوك والسوق النقدية.";
-                            runOnUiThread(() -> reply(directAnswer));
-                            return;
+                        } catch (Exception currencyError) {
+                            lastCurrencyError = currencyError;
+                        } finally {
+                            if (currencyConnection != null) currencyConnection.disconnect();
                         }
-                    } finally {
-                        if (currencyConnection != null) currencyConnection.disconnect();
                     }
+                    throw new java.io.IOException("Currency providers unavailable", lastCurrencyError);
                 }
                 connection = (HttpURLConnection) new URL(INFO_API_URL).openConnection();
                 connection.setRequestMethod("POST");
@@ -593,7 +604,11 @@ public class MainActivity extends Activity {
                 final String finalAnswer = answer;
                 runOnUiThread(() -> reply(finalAnswer));
             } catch (Exception e) {
-                if (e.getMessage() != null && e.getMessage().startsWith("device_pending_approval:")) {
+                if ("currency".equals(type)) {
+                    String detail = e.getCause() == null ? e.getClass().getSimpleName()
+                            : e.getCause().getClass().getSimpleName();
+                    runOnUiThread(() -> reply("تعذر الوصول إلى مصدري أسعار الصرف. تأكد من اتصال التلفزيون بالإنترنت، ثم حاول مجددًا. (تفاصيل الاتصال: " + detail + ")"));
+                } else if (e.getMessage() != null && e.getMessage().startsWith("device_pending_approval:")) {
                     String deviceId = e.getMessage().substring("device_pending_approval:".length());
                     runOnUiThread(() -> reply("تم تسجيل هذا التلفزيون، لكنه ينتظر موافقة المسؤول قبل عرض المعلومات المباشرة. رقم الجهاز: " + deviceId));
                 } else {
