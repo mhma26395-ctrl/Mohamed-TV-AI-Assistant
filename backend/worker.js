@@ -302,6 +302,52 @@ export async function getGoldInfo(currency, fetcher = fetch) {
   }
 }
 
+const SPORTS_LEAGUES = {
+  "egyptian-premier-league": { code: "egy.1", name: "الدوري المصري" },
+  "saudi-pro-league": { code: "sau.1", name: "الدوري السعودي" },
+  "english-premier-league": { code: "eng.1", name: "الدوري الإنجليزي الممتاز" },
+  "spanish-la-liga": { code: "esp.1", name: "الدوري الإسباني" }
+};
+
+async function getSportsInfo(leagueKey, dateValue, locale) {
+  const league = SPORTS_LEAGUES[leagueKey];
+  if (!league) return { ok: false, error: "unsupported_league" };
+  const date = /^\\d{8}$/.test(String(dateValue || "")) ? String(dateValue) :
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" })
+      .format(new Date()).replace(/-/g, "");
+  const url = "https://site.api.espn.com/apis/site/v2/sports/soccer/" +
+    league.code + "/scoreboard?dates=" + date;
+  const response = await fetch(url, { signal: AbortSignal.timeout(12000), headers: { "accept": "application/json" } });
+  if (!response.ok) throw new Error("sports_provider_unavailable");
+  const data = await response.json();
+  const events = Array.isArray(data.events) ? data.events : [];
+  const matches = events.map(event => {
+    const competition = event.competitions?.[0] || {};
+    const competitors = Array.isArray(competition.competitors) ? competition.competitors : [];
+    const home = competitors.find(x => x.homeAway === "home") || competitors[0] || {};
+    const away = competitors.find(x => x.homeAway === "away") || competitors[1] || {};
+    const status = competition.status || event.status || {};
+    const venue = competition.venue || {};
+    return {
+      id: String(event.id || ""),
+      dateTime: event.date || null,
+      homeTeam: home.team?.displayName || home.team?.name || "غير معروف",
+      awayTeam: away.team?.displayName || away.team?.name || "غير معروف",
+      homeScore: home.score ?? null,
+      awayScore: away.score ?? null,
+      status: status.type?.detail || status.type?.description || "لم تبدأ",
+      state: status.type?.state || "pre",
+      venue: venue.fullName || null
+    };
+  }).filter(x => x.homeTeam !== "غير معروف" && x.awayTeam !== "غير معروف");
+  return {
+    ok: true, type: "sports", league: league.name, leagueCode: league.code,
+    date, matches, count: matches.length,
+    source: "ESPN public scoreboard endpoint",
+    note: "Unofficial public feed; coverage may vary by competition. Empty results do not prove that no match exists."
+  };
+}
+
 async function getNewsInfo(query, locale) {
   const q = cleanLocation(query || "Egypt");
   const params = new URLSearchParams({
@@ -713,7 +759,7 @@ export default {
 
     if (url.pathname === "/v1/info") {
       const infoBody = body;
-      if (!infoBody || !["time", "weather", "currency", "gold", "news"].includes(infoBody.type) || (["time", "weather", "news"].includes(infoBody.type) && (!infoBody.location || typeof infoBody.location !== "string" || !infoBody.location.trim() || infoBody.location.length > 100))) {
+      if (!infoBody || !["time", "weather", "currency", "gold", "news", "sports"].includes(infoBody.type) || (["time", "weather", "news"].includes(infoBody.type) && (!infoBody.location || typeof infoBody.location !== "string" || !infoBody.location.trim() || infoBody.location.length > 100))) {
         return json({ error: "invalid_info_request" }, 400);
       }
       try {
@@ -725,7 +771,9 @@ export default {
               ? await getCurrencyInfo(infoBody.from, infoBody.to)
               : infoBody.type === "gold"
                 ? await getGoldInfo(infoBody.currency || "EGP")
-                : await getNewsInfo(infoBody.location, infoBody.locale);
+                : infoBody.type === "sports"
+                  ? await getSportsInfo(infoBody.league, infoBody.date, infoBody.locale)
+                  : await getNewsInfo(infoBody.location, infoBody.locale);
         return json(data, data.ok ? 200 : 404);
       } catch (error) {
         return json({ ok: false, error: "live_info_unavailable", detail: error?.message || "provider_error" }, 502);
