@@ -507,9 +507,9 @@ public class MainActivity extends Activity {
                             if (!year.isEmpty() || !kind.isEmpty()) animeText.append(" · ").append(kind).append(year.isEmpty() ? "" : " · " + year);
                             if (!item.isNull("score")) animeText.append(" · التقييم: ").append(item.optString("score"));
                             String synopsis = item.optString("synopsis", "");
-                            if (!synopsis.isEmpty()) animeText.append("\\n").append(synopsis.length() > 190 ? synopsis.substring(0, 190) + "…" : synopsis);
+                            if (!synopsis.isEmpty()) animeText.append("\n").append(synopsis.length() > 190 ? synopsis.substring(0, 190) + "…" : synopsis);
                         }
-                        animeText.append("\\n\\nالمصدر: Jikan API. التقييمات والبيانات قد تتغير، ولا يعني الترشيح أن العمل متاح على منصة معينة.");
+                        animeText.append("\n\nالمصدر: Jikan API. التقييمات والبيانات قد تتغير، ولا يعني الترشيح أن العمل متاح على منصة معينة.");
                         answer = animeText.toString().trim();
                     }
                 } else if ("sports".equals(type)) {
