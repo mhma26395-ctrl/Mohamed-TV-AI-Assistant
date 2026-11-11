@@ -372,29 +372,43 @@ public class MainActivity extends Activity {
 
 
     private String detectInfoCity(String normalized) {
-        String[][] cities = {
-            {"القاهرة","القاهره","cairo"}, {"لندن","london"}, {"لوس انجلوس","los angeles"},
-            {"نيويورك","new york"}, {"باريس","paris"}, {"الرياض","riyadh"}, {"دبي","dubai"},
+        // Normalize common Arabic city spellings, but do not require a fixed city list.
+        String[][] aliases = {
+            {"القاهرة","القاهره","cairo"}, {"الإسكندرية","الاسكندرية","اسكندرية","اسكندريه","alexandria"},
+            {"لندن","london"}, {"لوس انجلوس","los angeles"}, {"نيويورك","new york"},
+            {"باريس","paris"}, {"الرياض","riyadh"}, {"دبي","dubai"},
             {"مكه","مكة","mecca"}, {"طوكيو","tokyo"}, {"اسطنبول","istanbul"}
         };
-        for (String[] group : cities) for (String city : group) {
-            if (normalized.contains(city)) {
-                if ("القاهره".equals(city)) return "Cairo";
-                if ("لندن".equals(city)) return "London";
-                if ("لوس انجلوس".equals(city)) return "Los Angeles";
-                if ("نيويورك".equals(city)) return "New York";
-                if ("باريس".equals(city)) return "Paris";
-                if ("الرياض".equals(city)) return "Riyadh";
-                if ("دبي".equals(city)) return "Dubai";
-                if ("مكه".equals(city) || "مكة".equals(city)) return "Mecca";
-                if ("طوكيو".equals(city)) return "Tokyo";
-                if ("اسطنبول".equals(city)) return "Istanbul";
-                return city;
+        for (String[] group : aliases) {
+            for (String alias : group) {
+                if (normalized.contains(alias)) {
+                    if (alias.equals("القاهرة") || alias.equals("القاهره")) return "Cairo";
+                    if (alias.equals("الإسكندرية") || alias.equals("الاسكندرية") || alias.equals("اسكندرية")
+                            || alias.equals("اسكندريه")) return "Alexandria";
+                    if (alias.equals("لندن")) return "London";
+                    if (alias.equals("لوس انجلوس")) return "Los Angeles";
+                    if (alias.equals("نيويورك")) return "New York";
+                    if (alias.equals("باريس")) return "Paris";
+                    if (alias.equals("الرياض")) return "Riyadh";
+                    if (alias.equals("دبي")) return "Dubai";
+                    if (alias.equals("مكه") || alias.equals("مكة")) return "Mecca";
+                    if (alias.equals("طوكيو")) return "Tokyo";
+                    if (alias.equals("اسطنبول")) return "Istanbul";
+                    return alias;
+                }
             }
         }
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:في|بمدينه|بمدينة|in)\\s+([\\p{L}][\\p{L} .'-]{1,40})").matcher(normalized);
-        if (m.find()) return m.group(1).trim();
-        return "";
+
+        // Extract a free-form place after common Arabic/English location phrases.
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                "(?:\\\\bفي\\\\s+|\\\\bبمدينة\\\\s+|\\\\bمدينه\\\\s+|\\\\bin\\\\s+)([\\\\p{L}][\\\\p{L} .'-]{1,50})")
+                .matcher(normalized);
+        if (!m.find()) return "";
+        String candidate = m.group(1).trim();
+        candidate = candidate.replaceAll("\\s+(?:مصر|egypt|السعوديه|السعودية|السعوديه|saudi arabia|المملكة العربية السعودية)$", "").trim();
+        candidate = candidate.replaceAll("[،,.!?؟]+$", "").trim();
+        candidate = candidate.replaceAll("^(?:مدينه|مدينة)\\\\s+", "").trim();
+        return candidate;
     }
 
     private boolean tryHandleLiveInfo(String raw, String normalized) {
