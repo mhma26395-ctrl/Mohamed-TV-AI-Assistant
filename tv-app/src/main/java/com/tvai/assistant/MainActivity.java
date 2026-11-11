@@ -748,17 +748,27 @@ public class MainActivity extends Activity {
                 String sessionToken = DeviceAuth.getSessionToken(this);
                 connection.setRequestProperty("Authorization", "Bearer " + sessionToken);
                 JSONObject payload = new JSONObject();
-                JSONArray installedApps = getInstalledLaunchableAppsJson();
-                StringBuilder appContext = new StringBuilder("\n\nACTUAL_INSTALLED_APPS_ON_THIS_TV. Use only exact packageName values below for launch_app; never guess package names. If the requested app is not listed, say so.\n");
-                int contextLimit = Math.max(0, 3800 - contextualMessage.length());
-                for (int i = 0; i < installedApps.length() && i < 80; i++) {
-                    JSONObject app = installedApps.optJSONObject(i);
-                    if (app == null) continue;
-                    String line = app.optString("name") + " | " + app.optString("packageName") + "\n";
-                    if (appContext.length() + line.length() > contextLimit) break;
-                    appContext.append(line);
+                // App inventory is useful for app-specific commands, but wastes input tokens on unrelated questions.
+                String normalizedRequest = normalize(contextualMessage);
+                boolean needsAppInventory = has(normalizedRequest,
+                        "افتح", "شغل", "تشغيل", "تطبيق", "التطبيقات", "برنامج", "برامج",
+                        "مثبت", "مثبته", "صلاحيات", "اذونات", "فحص التطبيقات", "مراجعه التطبيقات",
+                        "app", "apps", "installed", "launch", "package", "audit");
+                String messageWithContext = contextualMessage;
+                if (needsAppInventory) {
+                    JSONArray installedApps = getInstalledLaunchableAppsJson();
+                    StringBuilder appContext = new StringBuilder("\n\nACTUAL_INSTALLED_APPS_ON_THIS_TV. Use only exact packageName values below for launch_app; never guess package names. If the requested app is not listed, say so.\n");
+                    int contextLimit = Math.max(0, 2200 - contextualMessage.length());
+                    for (int i = 0; i < installedApps.length() && i < 60; i++) {
+                        JSONObject app = installedApps.optJSONObject(i);
+                        if (app == null) continue;
+                        String line = app.optString("name") + " | " + app.optString("packageName") + "\n";
+                        if (appContext.length() + line.length() > contextLimit) break;
+                        appContext.append(line);
+                    }
+                    messageWithContext += appContext.toString();
                 }
-                payload.put("message", contextualMessage + appContext.toString());
+                payload.put("message", messageWithContext);
                 stage = "sending_request";
                 runOnUiThread(() -> setStatus("Sending command… / إرسال الأمر…"));
                 try (OutputStream out = connection.getOutputStream()) {
