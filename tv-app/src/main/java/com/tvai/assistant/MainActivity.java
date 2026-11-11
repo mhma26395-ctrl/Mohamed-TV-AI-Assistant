@@ -403,11 +403,12 @@ public class MainActivity extends Activity {
         boolean asksGold = has(normalized, "الذهب", "سعر الذهب", "gold price", "gold rate");
         boolean asksCurrency = has(normalized, "سعر الدولار", "الدولار اليوم", "سعر العمله", "سعر العملات", "exchange rate", "currency rate", "usd egp", "dollar today");
         boolean asksNews = has(normalized, "الاخبار", "اخبار", "اخر الاخبار", "news", "headlines");
+        boolean asksAnime = has(normalized, "انمي", "أنمي", "anime", "كرتون ياباني");
         boolean asksSports = has(normalized, "مباريات", "مباراه", "مباراة", "جدول مباريات",
                 "مواعيد المباريات", "ماتشات", "ماتش", "الدوري المصري", "الدوري السعودي",
                 "الدوري الانجليزي", "الدوري الإنجليزي", "الدوري الاسباني", "الدوري الإسباني",
                 "premier league", "la liga", "saudi pro league", "fixtures", "football matches");
-        if (!asksTime && !asksWeather && !asksGold && !asksCurrency && !asksNews && !asksSports) return false;
+        if (!asksTime && !asksWeather && !asksGold && !asksCurrency && !asksNews && !asksSports && !asksAnime) return false;
 
         String city = detectInfoCity(normalized);
         if (asksNews && city.isEmpty()) {
@@ -432,7 +433,7 @@ public class MainActivity extends Activity {
                 return true;
             }
         }
-        final String type = asksSports ? "sports" : asksWeather ? "weather" : asksTime ? "time" : asksGold ? "gold" : asksCurrency ? "currency" : "news";
+        final String type = asksSports ? "sports" : asksAnime ? "anime" : asksWeather ? "weather" : asksTime ? "time" : asksGold ? "gold" : asksCurrency ? "currency" : "news";
         final String queryLocation = city;
         final String sportsLeague = selectedLeague;
         setStatus("جاري جلب المعلومات من مصدر مباشر…");
@@ -451,9 +452,16 @@ public class MainActivity extends Activity {
                 payload.put("type", type);
                 payload.put("locale", speechLanguage);
                 if ("sports".equals(type)) {
+                    java.time.ZoneId zone = java.time.ZoneId.systemDefault();
                     payload.put("league", sportsLeague);
-                    java.text.SimpleDateFormat dayFormat = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US);
-                    payload.put("date", dayFormat.format(new java.util.Date()));
+                    payload.put("date", java.time.LocalDate.now(zone).format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE));
+                    payload.put("timezone", zone.getId());
+                }
+                if ("anime".equals(type)) {
+                    String animeQuery = raw == null ? "" : raw.trim()
+                            .replaceAll("(?i)\\banime\\b", "")
+                            .replace("أنمي", "").replace("انمي", "").replace("كرتون ياباني", "").trim();
+                    payload.put("query", animeQuery);
                 }
                 if ("time".equals(type) || "weather".equals(type) || "news".equals(type)) payload.put("location", queryLocation);
                 if ("currency".equals(type)) { payload.put("from", "USD"); payload.put("to", "EGP"); }
@@ -484,6 +492,26 @@ public class MainActivity extends Activity {
                 } else if ("time".equals(type)) {
                     answer = "الوقت الآن في " + queryLocation + ": " + result.optString("localDateTime") +
                             "\nالمنطقة الزمنية: " + result.optString("timezone");
+                } else if ("anime".equals(type)) {
+                    JSONArray items = result.optJSONArray("anime");
+                    if (items == null || items.length() == 0) {
+                        answer = "لم يعثر مصدر الأنمي على نتائج مناسبة لهذا البحث حاليًا. جرّب اسمًا آخر. المصدر: Jikan.";
+                    } else {
+                        StringBuilder animeText = new StringBuilder("ترشيحات الأنمي");
+                        for (int i = 0; i < items.length() && i < 8; i++) {
+                            JSONObject item = items.optJSONObject(i);
+                            if (item == null) continue;
+                            animeText.append("\\n\\n").append(i + 1).append(". ").append(item.optString("title", "بدون عنوان"));
+                            String year = item.optString("year", "");
+                            String kind = item.optString("type", "");
+                            if (!year.isEmpty() || !kind.isEmpty()) animeText.append(" · ").append(kind).append(year.isEmpty() ? "" : " · " + year);
+                            if (!item.isNull("score")) animeText.append(" · التقييم: ").append(item.optString("score"));
+                            String synopsis = item.optString("synopsis", "");
+                            if (!synopsis.isEmpty()) animeText.append("\\n").append(synopsis.length() > 190 ? synopsis.substring(0, 190) + "…" : synopsis);
+                        }
+                        animeText.append("\\n\\nالمصدر: Jikan API. التقييمات والبيانات قد تتغير، ولا يعني الترشيح أن العمل متاح على منصة معينة.");
+                        answer = animeText.toString().trim();
+                    }
                 } else if ("sports".equals(type)) {
                     JSONArray matches = result.optJSONArray("matches");
                     if (matches == null || matches.length() == 0) {
@@ -497,7 +525,7 @@ public class MainActivity extends Activity {
                             try {
                                 java.time.Instant instant = java.time.Instant.parse(kickoff);
                                 kickoff = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
-                                        .withZone(java.time.ZoneId.systemDefault()).format(instant);
+                                        .withZone(java.time.ZoneId.of(result.optString("timezone", java.time.ZoneId.systemDefault().getId()))).format(instant);
                             } catch (Exception ignored) { kickoff = "موعد غير متاح"; }
                             String score = match.isNull("homeScore") || match.isNull("awayScore")
                                     ? "" : " (" + match.optString("homeScore") + " - " + match.optString("awayScore") + ")";
