@@ -1,6 +1,10 @@
 name: Publish tested Mohamed TV AI Assistant release
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-tested-release.yml'
   workflow_dispatch:
 
 permissions:
@@ -51,6 +55,6 @@ jobs:
         run: |
           gh release create v0.6.9 dist/tv-app-release.apk#Mohamed-TV-AI-Assistant-0.6.9.apk dist/SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" \
-            --target a775f38ab13811e6a893fa7ef9405c1b54433141 \
+            --target 1e1c3f5c0ba3879a30b88d57b14d1ccc8c914696 \
             --title "Mohamed TV AI Assistant 0.6.9" \
             --notes-file dist/RELEASE_NOTES.md
