@@ -226,12 +226,33 @@ async function getCurrencyInfo(from, to) {
   const base = String(from || "USD").toUpperCase();
   const quote = String(to || "EGP").toUpperCase();
   if (!/^[A-Z]{3}$/.test(base) || !/^[A-Z]{3}$/.test(quote)) return { ok: false, error: "invalid_currency" };
-  const response = await fetch("https://api.frankfurter.app/latest?from=" + base + "&to=" + quote, { signal: AbortSignal.timeout(12000) });
-  if (!response.ok) throw new Error("exchange_rate_provider_unavailable");
-  const data = await response.json();
-  const rate = data.rates?.[quote];
-  if (typeof rate !== "number") return { ok: false, error: "currency_pair_unavailable", from: base, to: quote };
-  return { ok: true, type: "currency", from: base, to: quote, rate, date: data.date, source: "Frankfurter (reference exchange rates)", note: "Reference rate; bank, cash-market and card rates may differ." };
+
+  // Prefer the current Frankfurter API hostname. Keep the legacy hostname as
+  // a fallback for transient routing or DNS failures.
+  const endpoints = [
+    "https://api.frankfurter.dev/v1/latest?base=" + base + "&symbols=" + quote,
+    "https://api.frankfurter.app/latest?from=" + base + "&to=" + quote
+  ];
+  let lastError = null;
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, { signal: AbortSignal.timeout(12000) });
+      if (!response.ok) throw new Error("exchange_rate_http_" + response.status);
+      const data = await response.json();
+      const rate = data.rates?.[quote];
+      if (typeof rate !== "number" || !Number.isFinite(rate)) {
+        throw new Error("exchange_rate_missing_pair");
+      }
+      return {
+        ok: true, type: "currency", from: base, to: quote, rate,
+        date: data.date, source: "Frankfurter (reference exchange rates)",
+        note: "Reference rate; bank, cash-market and card rates may differ."
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error("exchange_rate_providers_unavailable: " + (lastError?.message || "provider_error"));
 }
 
 export async function getGoldInfo(currency, fetcher = fetch) {
