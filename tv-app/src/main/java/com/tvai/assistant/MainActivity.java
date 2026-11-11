@@ -411,6 +411,23 @@ public class MainActivity extends Activity {
         return candidate;
     }
 
+    private String resumePendingLiveInfo(String message) {
+        android.content.SharedPreferences prefs =
+                getSharedPreferences("assistant_pending_followup", MODE_PRIVATE);
+        String pendingQuestion = prefs.getString("pending_live_question", "");
+        if (pendingQuestion.trim().isEmpty()) return message;
+
+        String normalizedReply = normalize(message);
+        String city = detectInfoCity(normalizedReply);
+        if (city.isEmpty()) {
+            // Keep the pending question if the reply is not recognizable as a place.
+            return message;
+        }
+
+        prefs.edit().remove("pending_live_question").apply();
+        return pendingQuestion + " في " + city;
+    }
+
     private boolean tryHandleLiveInfo(String raw, String normalized) {
         boolean asksTime = has(normalized, "الوقت", "الساعه كام", "كم الساعه", "time now", "current time", "what time");
         boolean asksWeather = has(normalized, "الطقس", "الجو", "درجه الحراره", "حاله الطقس", "weather", "temperature", "forecast");
@@ -431,7 +448,11 @@ public class MainActivity extends Activity {
             else city = "Egypt";
         }
         if ((asksTime || asksWeather) && city.isEmpty()) {
-            reply("حدد المدينة من فضلك، مثل القاهرة أو لندن أو لوس أنجلوس.");
+            // Save the original request so a city supplied in the next voice/text turn
+            // completes this same request (including its forecast horizon).
+            getSharedPreferences("assistant_pending_followup", MODE_PRIVATE).edit()
+                    .putString("pending_live_question", raw).apply();
+            reply("ما المدينة المطلوبة؟ قل اسم المدينة فقط، وسأكمل نفس طلبك عن الطقس أو التوقعات دون بدء سؤال جديد.");
             return true;
         }
 
@@ -788,6 +809,7 @@ public class MainActivity extends Activity {
     }
 
     protected void sendToAi(String message) {
+        message = resumePendingLiveInfo(message);
         String normalizedRequest = normalize(message);
         final String originalMessage = message;
         final String contextualMessage = buildConversationContext(message);
