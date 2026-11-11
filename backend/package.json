@@ -4,5 +4,8 @@
   "scripts": {
     "check": "node --check worker.js",
     "test": "node --test"
+  },
+  "devDependencies": {
+    "wrangler": "4.160.1"
   }
 }
