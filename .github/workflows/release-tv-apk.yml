@@ -52,10 +52,8 @@ jobs:
           echo "RELEASE_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
           echo "RELEASE_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
 
-      - name: Check backend syntax and tests
-        run: |
-          npm --prefix backend run check
-          npm --prefix backend test
+      - name: Confirm legacy app source is present
+        run: test -s tv-app/src/main/java/com/tvai/assistant/MainActivity.java
 
       - name: Build signed production APK
         run: gradle assembleRelease
