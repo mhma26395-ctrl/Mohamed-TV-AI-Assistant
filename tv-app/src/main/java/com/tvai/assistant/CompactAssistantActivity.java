@@ -15,6 +15,7 @@ import android.widget.TextView;
 
 public class CompactAssistantActivity extends MainActivity {
     private ScrollView answerScroll;
+    private Button answerUp, answerDown, mic, close;
 
     @Override protected void buildUi() {
         LinearLayout panel = new LinearLayout(this);
@@ -74,12 +75,19 @@ public class CompactAssistantActivity extends MainActivity {
         answerScroll.setOnKeyListener((v, keyCode, event) -> {
             if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return false;
             if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
-                answerScroll.smoothScrollBy(0, (int)(150 * getResources().getDisplayMetrics().density));
+                if (answerScroll.canScrollVertically(1)) {
+                    answerScroll.smoothScrollBy(0, (int)(150 * getResources().getDisplayMetrics().density));
+                } else if (answerUp != null) {
+                    answerUp.requestFocus();
+                }
                 return true;
             }
             if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
-                answerScroll.smoothScrollBy(0, -(int)(150 * getResources().getDisplayMetrics().density));
-                return true;
+                if (answerScroll.canScrollVertically(-1)) {
+                    answerScroll.smoothScrollBy(0, -(int)(150 * getResources().getDisplayMetrics().density));
+                    return true;
+                }
+                return false;
             }
             return false;
         });
@@ -87,14 +95,14 @@ public class CompactAssistantActivity extends MainActivity {
 
         LinearLayout answerControls = new LinearLayout(this);
         answerControls.setGravity(Gravity.CENTER);
-        Button answerUp = new Button(this);
+        answerUp = new Button(this);
         answerUp.setText("↑ أعلى");
         answerUp.setAllCaps(false);
         answerUp.setOnClickListener(v -> answerScroll.smoothScrollBy(0,
                 -(int)(180 * getResources().getDisplayMetrics().density)));
         answerControls.addView(answerUp, new LinearLayout.LayoutParams(0, -2, 1));
 
-        Button answerDown = new Button(this);
+        answerDown = new Button(this);
         answerDown.setText("↓ باقي الإجابة");
         answerDown.setAllCaps(false);
         answerDown.setOnClickListener(v -> answerScroll.smoothScrollBy(0,
@@ -104,18 +112,35 @@ public class CompactAssistantActivity extends MainActivity {
 
         LinearLayout actions = new LinearLayout(this);
         actions.setGravity(Gravity.CENTER);
-        Button mic = new Button(this);
+        mic = new Button(this);
         mic.setText("🎙 تحدث");
         mic.setAllCaps(false);
         mic.setOnClickListener(v -> startListening());
         actions.addView(mic, new LinearLayout.LayoutParams(0, -2, 1));
 
-        Button close = new Button(this);
+        close = new Button(this);
         close.setText("إغلاق النافذة");
         close.setAllCaps(false);
         close.setOnClickListener(v -> finish());
         actions.addView(close, new LinearLayout.LayoutParams(0, -2, 1));
         panel.addView(actions);
+
+        // Explicit D-pad path: answer -> scroll controls -> voice/close.
+        answerScroll.setNextFocusDownId(answerUp.getId());
+        answerUp.setNextFocusUpId(answerScroll.getId());
+        answerDown.setNextFocusUpId(answerScroll.getId());
+        answerUp.setNextFocusRightId(answerDown.getId());
+        answerDown.setNextFocusLeftId(answerUp.getId());
+        answerUp.setNextFocusDownId(mic.getId());
+        answerDown.setNextFocusDownId(close.getId());
+        mic.setNextFocusUpId(answerUp.getId());
+        close.setNextFocusUpId(answerDown.getId());
+        mic.setNextFocusRightId(close.getId());
+        close.setNextFocusLeftId(mic.getId());
+        answerUp.setFocusable(true);
+        answerDown.setFocusable(true);
+        mic.setFocusable(true);
+        close.setFocusable(true);
 
         setContentView(panel);
         answerScroll.requestFocus();
@@ -147,7 +172,12 @@ public class CompactAssistantActivity extends MainActivity {
 
     @Override public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (hasFocus && answerScroll != null) answerScroll.requestFocus();
+        if (hasFocus && answerScroll != null && !hasUsableFocus()) answerScroll.requestFocus();
+    }
+
+    private boolean hasUsableFocus() {
+        View focused = getCurrentFocus();
+        return focused != null && focused.isShown() && focused.isFocusable();
     }
 
     @Override public void onBackPressed() {
