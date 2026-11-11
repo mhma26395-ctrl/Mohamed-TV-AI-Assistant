@@ -816,7 +816,15 @@ export default {
 
     const raw = await upstream.json().catch(() => ({}));
     if (upstream.status === 429) {
-      return json({ error: "provider_rate_limited", retryAfter: upstream.headers.get("retry-after") || null }, 429);
+      // Surface provider quota telemetry without exposing credentials or request content.
+      return json({
+        error: "provider_rate_limited",
+        retryAfter: upstream.headers.get("retry-after") || null,
+        remainingRequests: upstream.headers.get("x-ratelimit-remaining-requests") || null,
+        remainingTokens: upstream.headers.get("x-ratelimit-remaining-tokens") || null,
+        resetRequests: upstream.headers.get("x-ratelimit-reset-requests") || null,
+        resetTokens: upstream.headers.get("x-ratelimit-reset-tokens") || null
+      }, 429);
     }
     if (!upstream.ok) {
       return json({ error: "provider_error", providerStatus: upstream.status }, 502);
