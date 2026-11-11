@@ -460,7 +460,11 @@ public class MainActivity extends Activity {
                 if ("anime".equals(type)) {
                     String animeQuery = raw == null ? "" : raw.trim()
                             .replaceAll("(?i)\\banime\\b", "")
-                            .replace("أنمي", "").replace("انمي", "").replace("كرتون ياباني", "").trim();
+                            .replace("كرتون ياباني", "").replace("الأنمي", "").replace("أنمي", "").replace("انمي", "")
+                            .replace("رشحلي", "").replace("رشح", "").replace("اقترحلي", "").replace("اقترح", "")
+                            .replace("ترشيحات", "").replace("ترشيح", "").replace("ما هي", "").replace("ايه", "")
+                            .replace("أفضل", "").replace("افضل", "").replace("الجديد", "").replace("جديد", "")
+                            .replace("اليوم", "").replace("من فضلك", "").replace("لو سمحت", "").trim();
                     payload.put("query", animeQuery);
                 }
                 if ("time".equals(type) || "weather".equals(type) || "news".equals(type)) payload.put("location", queryLocation);
