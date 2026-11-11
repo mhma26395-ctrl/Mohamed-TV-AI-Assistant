@@ -1,12 +1,12 @@
 package com.tvai.assistant;
 
 import android.content.Intent;
-
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -14,6 +14,8 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 public class CompactAssistantActivity extends MainActivity {
+    private ScrollView answerScroll;
+
     @Override protected void buildUi() {
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
@@ -40,20 +42,22 @@ public class CompactAssistantActivity extends MainActivity {
         status.setPadding(4, 8, 4, 8);
         panel.addView(status);
 
-        // Keep transcript available to the shared speech-recognition flow without showing it.
         transcript = new TextView(this);
         transcript.setVisibility(View.GONE);
         panel.addView(transcript);
-        // Keep the compact window, but make the complete answer reachable with the TV remote.
-        ScrollView answerScroll = new ScrollView(this);
+
+        answerScroll = new ScrollView(this);
         answerScroll.setFillViewport(true);
         answerScroll.setFocusable(true);
         answerScroll.setFocusableInTouchMode(true);
+        answerScroll.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+        answerScroll.setContentDescription("منطقة إجابة المساعد. استخدم السهمين لأعلى وأسفل لقراءة بقية الإجابة");
         answerScroll.setVerticalScrollBarEnabled(true);
         answerScroll.setSmoothScrollingEnabled(true);
         int answerHeight = (int)(getResources().getDisplayMetrics().density * 230);
         answerScroll.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, answerHeight));
+
         response = new TextView(this);
         response.setText("تحدث لإعطاء أمر للتلفزيون");
         response.setTextColor(Color.WHITE);
@@ -66,8 +70,9 @@ public class CompactAssistantActivity extends MainActivity {
         response.setPadding(8, 8, 8, 12);
         answerScroll.addView(response, new ScrollView.LayoutParams(
                 ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
+
         answerScroll.setOnKeyListener((v, keyCode, event) -> {
-            if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return true;
+            if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return false;
             if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
                 answerScroll.smoothScrollBy(0, (int)(150 * getResources().getDisplayMetrics().density));
                 return true;
@@ -88,6 +93,7 @@ public class CompactAssistantActivity extends MainActivity {
         answerUp.setOnClickListener(v -> answerScroll.smoothScrollBy(0,
                 -(int)(180 * getResources().getDisplayMetrics().density)));
         answerControls.addView(answerUp, new LinearLayout.LayoutParams(0, -2, 1));
+
         Button answerDown = new Button(this);
         answerDown.setText("↓ باقي الإجابة");
         answerDown.setAllCaps(false);
@@ -112,6 +118,7 @@ public class CompactAssistantActivity extends MainActivity {
         panel.addView(actions);
 
         setContentView(panel);
+        answerScroll.requestFocus();
     }
 
     @Override protected void reply(String message) {
@@ -120,6 +127,7 @@ public class CompactAssistantActivity extends MainActivity {
             boolean arabic = message != null && message.matches("(?s).*[\\u0600-\\u06FF].*");
             response.setTextDirection(arabic ? View.TEXT_DIRECTION_FIRST_STRONG_RTL : View.TEXT_DIRECTION_FIRST_STRONG_LTR);
             response.setGravity(arabic ? Gravity.TOP | Gravity.RIGHT : Gravity.TOP | Gravity.LEFT);
+            if (answerScroll != null) answerScroll.post(() -> answerScroll.scrollTo(0, 0));
         }
     }
 
@@ -135,6 +143,11 @@ public class CompactAssistantActivity extends MainActivity {
         p.y = 90;
         getWindow().setAttributes(p);
         getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+    }
+
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && answerScroll != null) answerScroll.requestFocus();
     }
 
     @Override public void onBackPressed() {
