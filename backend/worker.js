@@ -738,7 +738,26 @@ export default {
       return json({ error: "server_not_configured" }, 503);
     }
     if (request.method === "GET" && url.pathname === "/v1/health") {
-      return json({ ok: true, service: "mohamed-tv-ai", apiVersion: 1, provider: configuredProvider });
+      const required = {
+        AUTH_DEVICES: !!env.AUTH_DEVICES,
+        AUTH_CHALLENGES: !!env.AUTH_CHALLENGES,
+        SESSION_SIGNING_SECRET: !!env.SESSION_SIGNING_SECRET && env.SESSION_SIGNING_SECRET.length >= 32,
+        RATE_LIMITER: !!env.RATE_LIMITER,
+        DEVICE_RATE_LIMITER: !!env.DEVICE_RATE_LIMITER,
+        ENROLL_LIMITER: !!env.ENROLL_LIMITER,
+        DEEPSEEK_API_KEY: configuredProvider !== "deepseek" || !!env.DEEPSEEK_API_KEY,
+        GROQ_API_KEY: configuredProvider !== "groq" || !!env.GROQ_API_KEY
+      };
+      const missing = Object.entries(required).filter(([, ready]) => !ready).map(([name]) => name);
+      return json({
+        ok: missing.length === 0,
+        service: "mohamed-tv-ai",
+        apiVersion: 1,
+        provider: configuredProvider,
+        model: configuredProvider === "deepseek" ? (env.DEEPSEEK_MODEL || "deepseek-flash") : (env.GROQ_MODEL || "openai/gpt-oss-120b"),
+        readiness: required,
+        missing
+      });
     }
     if (url.pathname.startsWith("/v1/auth/") || url.pathname.startsWith("/v1/admin/devices/")) return authRoutes(request, env, url);
     if (request.method !== "POST" || !["/v1/assistant", "/v1/info"].includes(url.pathname)) {
