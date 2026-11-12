@@ -1,7 +1,7 @@
 name: Build Mohamed TV AI Assistant APK
 on:
   push:
-    branches: [main, 'fix/compact-scroll-and-local-dev-settings']
+    branches: [main, 'fix/compact-scroll-and-local-dev-settings', 'feature/deepseek-staging-apk']
   workflow_dispatch:
 permissions:
   contents: read
@@ -30,12 +30,14 @@ jobs:
           gradle-version: 8.9
       - name: Build debug APK
         run: gradle assembleDebug
-      - name: Verify APK output
-        run: test -s tv-app/build/outputs/apk/debug/tv-app-debug.apk
+      - name: Verify APK output and staging identity
+        run: |
+          test -s tv-app/build/outputs/apk/debug/tv-app-debug.apk
+          aapt dump badging tv-app/build/outputs/apk/debug/tv-app-debug.apk | grep -q "package: name='com.tvai.assistant.next.staging'"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Mohamed-TV-AI-Assistant-0.6.9-debug
+          name: Mohamed-TV-AI-Assistant-0.7.0-DeepSeek-Staging
           path: tv-app/build/outputs/apk/debug/tv-app-debug.apk
           if-no-files-found: error
           retention-days: 14
