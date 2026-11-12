@@ -51,6 +51,13 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.widget.ImageView;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.EncodeHintType;
+import com.google.zxing.MultiFormatWriter;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import java.text.Normalizer;
@@ -190,7 +197,69 @@ public class MainActivity extends Activity {
         usage.setOnClickListener(v -> { if (hasUsageAccess()) reply("إذن Usage Access مفعّل بالفعل."); else openUsageAccessSettings(); });
         root.addView(usage);
 
-        TextView foot = label("Version 0.6.4 · Voice replies are optional. Remote key mapping uses Accessibility key filtering when supported by the TV.");
+        TextView supportTitle = label("Support the project / دعم المشروع");
+        supportTitle.setTextSize(22);
+        supportTitle.setTypeface(null, Typeface.BOLD);
+        supportTitle.setGravity(Gravity.CENTER);
+        root.addView(supportTitle);
+
+        TextView supportMessage = label("Enjoying Mohamed TV AI Assistant? Support its development. Your support is completely optional.\nهل أعجبك التطبيق؟ يمكنك دعم تطويره بمساهمة اختيارية، شكرًا لك.");
+        supportMessage.setTextSize(15);
+        supportMessage.setGravity(Gravity.CENTER);
+        supportMessage.setTextColor(Color.LTGRAY);
+        root.addView(supportMessage);
+
+        TextView scanHint = label("Scan this QR code with your phone camera to open the PayPal support page.\nامسح الرمز بكاميرا هاتفك لفتح صفحة الدعم عبر PayPal.");
+        scanHint.setTextSize(14);
+        scanHint.setGravity(Gravity.CENTER);
+        scanHint.setTextColor(Color.LTGRAY);
+        root.addView(scanHint);
+
+        try {
+            Map<EncodeHintType, Object> qrHints = new LinkedHashMap<>();
+            qrHints.put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.M);
+            qrHints.put(EncodeHintType.MARGIN, 2);
+            BitMatrix qrMatrix = new MultiFormatWriter().encode(
+                    "https://www.paypal.com/qrcodes/p2pqrc/VV4EEWFUZ8FCU",
+                    BarcodeFormat.QR_CODE, 480, 480, qrHints);
+            Bitmap qrBitmap = Bitmap.createBitmap(480, 480, Bitmap.Config.ARGB_8888);
+            for (int y = 0; y < 480; y++) {
+                for (int x = 0; x < 480; x++) {
+                    qrBitmap.setPixel(x, y, qrMatrix.get(x, y) ? Color.BLACK : Color.WHITE);
+                }
+            }
+            ImageView qrImage = new ImageView(this);
+            qrImage.setImageBitmap(qrBitmap);
+            qrImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            qrImage.setAdjustViewBounds(true);
+            qrImage.setBackgroundColor(Color.WHITE);
+            qrImage.setPadding(12, 12, 12, 12);
+            qrImage.setContentDescription("PayPal donation QR code for scanning with a phone camera");
+            LinearLayout.LayoutParams qrParams = new LinearLayout.LayoutParams(300, 300);
+            qrParams.gravity = Gravity.CENTER;
+            qrParams.topMargin = 12;
+            qrParams.bottomMargin = 12;
+            root.addView(qrImage, qrParams);
+        } catch (Exception qrError) {
+            TextView qrFallback = label("QR code unavailable. Use the PayPal button below.");
+            qrFallback.setGravity(Gravity.CENTER);
+            root.addView(qrFallback);
+        }
+
+        Button supportButton = button("Support via PayPal / ادعم عبر PayPal");
+        supportButton.setContentDescription("Open the developer's PayPal support page");
+        supportButton.setOnClickListener(v -> {
+            try {
+                Intent payPalIntent = new Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://www.paypal.com/qrcodes/p2pqrc/VV4EEWFUZ8FCU"));
+                startActivity(payPalIntent);
+            } catch (ActivityNotFoundException ignored) {
+                setStatus("تعذر فتح رابط PayPal على هذا الجهاز.");
+            }
+        });
+        root.addView(supportButton);
+
+        TextView foot = label("Version 0.7.1 · Voice replies are optional. Remote key mapping uses Accessibility key filtering when supported by the TV.");
         foot.setTextSize(13);
         root.addView(foot);
         if (micButton != null) micButton.requestFocus();
