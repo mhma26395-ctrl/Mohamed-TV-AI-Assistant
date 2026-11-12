@@ -484,7 +484,24 @@ public class MainActivity extends Activity {
                     } else if ("rate_limited".equals(error)) {
                         answer = "تم تجاوز حد الطلبات المؤقت. انتظر قليلاً ثم أعد المحاولة.";
                     } else {
-                        answer = "تعذر جلب المعلومات المباشرة حاليًا (رمز " + code + "). تحقق من اتصال التلفزيون بالخادم وحاول مرة أخرى.";
+                        if ("sports".equals(type)) {
+                            String diagnostic = "طلب المباريات: type=sports, league=" + sportsLeague;
+                            // Date is intentionally shown only as a non-sensitive request diagnostic.
+                            String requestedDate = "";
+                            try {
+                                java.text.SimpleDateFormat diagnosticFormat = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US);
+                                requestedDate = diagnosticFormat.format(new java.util.Date());
+                            } catch (Exception ignored) {}
+                            diagnostic += ", date=" + requestedDate;
+                            answer = "تعذر جلب معلومات المباريات (رمز " + code + "): "
+                                    + (error.isEmpty() ? "سبب غير محدد من الخادم" : error)
+                                    + "\\n" + diagnostic
+                                    + "\\nهذه تفاصيل تشخيصية لنسخة الاختبار فقط.";
+                        } else {
+                            answer = "تعذر جلب المعلومات المباشرة حاليًا (رمز " + code + "). "
+                                    + (error.isEmpty() ? "" : "تفاصيل الخادم: " + error + ". ")
+                                    + "تحقق من اتصال التلفزيون بالخادم وحاول مرة أخرى.";
+                        }
                     }
                 } else if ("time".equals(type)) {
                     answer = "الوقت الآن في " + queryLocation + ": " + result.optString("localDateTime") +
