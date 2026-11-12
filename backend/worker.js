@@ -733,8 +733,12 @@ export class AuthChallengeStore {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const configuredProvider = String(env.AI_PROVIDER || "groq").toLowerCase();
+    if (!["groq", "deepseek"].includes(configuredProvider)) {
+      return json({ error: "server_not_configured" }, 503);
+    }
     if (request.method === "GET" && url.pathname === "/v1/health") {
-      return json({ ok: true, service: "mohamed-tv-ai", apiVersion: 1, provider: "groq" });
+      return json({ ok: true, service: "mohamed-tv-ai", apiVersion: 1, provider: configuredProvider });
     }
     if (url.pathname.startsWith("/v1/auth/") || url.pathname.startsWith("/v1/admin/devices/")) return authRoutes(request, env, url);
     if (request.method !== "POST" || !["/v1/assistant", "/v1/info"].includes(url.pathname)) {
@@ -743,7 +747,8 @@ export default {
     if (!env.AUTH_DEVICES || !env.AUTH_CHALLENGES || !env.SESSION_SIGNING_SECRET || env.SESSION_SIGNING_SECRET.length < 32 || !env.RATE_LIMITER || !env.DEVICE_RATE_LIMITER) {
       return json({ error: "server_not_configured" }, 503);
     }
-    if (url.pathname === "/v1/assistant" && !env.GROQ_API_KEY) {
+    const providerApiKey = configuredProvider === "deepseek" ? env.DEEPSEEK_API_KEY : env.GROQ_API_KEY;
+    if (url.pathname === "/v1/assistant" && !providerApiKey) {
       return json({ error: "server_not_configured" }, 503);
     }
     const auth = request.headers.get("authorization") || "";
@@ -783,31 +788,46 @@ export default {
       }
     }
 
-    const model = env.GROQ_MODEL || "openai/gpt-oss-120b";
+    const isDeepSeek = configuredProvider === "deepseek";
+    const model = isDeepSeek
+      ? (env.DEEPSEEK_MODEL || "deepseek-flash")
+      : (env.GROQ_MODEL || "openai/gpt-oss-120b");
+    const providerUrl = isDeepSeek
+      ? "https://api.deepseek.com/chat/completions"
+      : "https://api.groq.com/openai/v1/chat/completions";
+    const messages = [
+      { role: "system", content: SYSTEM_INSTRUCTION },
+      { role: "user", content: body.message.trim() + (Array.isArray(body.installedApps) ? "\\n\\nINSTALLED_APPS_FROM_DEVICE (actual launchable apps on this TV; use exact packageName): " + JSON.stringify(body.installedApps.slice(0, 150)) : "") }
+    ];
+    const providerPayload = {
+      model,
+      messages,
+      tools: TOOLS,
+      tool_choice: "auto",
+      stream: false
+    };
+    if (isDeepSeek) {
+      // Non-thinking mode keeps device-command latency and token use predictable.
+      providerPayload.thinking = { type: "disabled" };
+      providerPayload.max_tokens = 900;
+    } else {
+      providerPayload.temperature = 0.6;
+      providerPayload.reasoning_effort = "low";
+      providerPayload.include_reasoning = false;
+      providerPayload.parallel_tool_calls = false;
+      providerPayload.max_completion_tokens = 900;
+    }
+
     let upstream;
     try {
-      upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      upstream = await fetch(providerUrl, {
         method: "POST",
         signal: AbortSignal.timeout(25000),
         headers: {
           "content-type": "application/json",
-          "authorization": `Bearer ${env.GROQ_API_KEY}`
+          "authorization": `Bearer ${providerApiKey}`
         },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: SYSTEM_INSTRUCTION },
-            { role: "user", content: body.message.trim() + (Array.isArray(body.installedApps) ? "\\n\\nINSTALLED_APPS_FROM_DEVICE (actual launchable apps on this TV; use exact packageName): " + JSON.stringify(body.installedApps.slice(0, 150)) : "") }
-          ],
-          tools: TOOLS,
-          tool_choice: "auto",
-          temperature: 0.6,
-          reasoning_effort: "low",
-          include_reasoning: false,
-          parallel_tool_calls: false,
-          max_completion_tokens: 900,
-          stream: false
-        })
+        body: JSON.stringify(providerPayload)
       });
     } catch (error) {
       const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
@@ -827,7 +847,7 @@ export default {
     const toolCalls = safeToolCalls(message);
     return json({
       ok: true,
-      provider: "groq",
+      provider: configuredProvider,
       model,
       text,
       toolCalls,
