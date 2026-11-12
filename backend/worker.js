@@ -412,11 +412,40 @@ export async function getSportsLeadersInfo(leagueKey, stat = "standings", fetche
   }
   if (!response.ok) throw new Error("sports_stats_http_" + response.status);
   const data = await response.json();
-  const rows = stat === "standings"
-    ? (data.standings || data.table || data.rows || data.data || [])
-    : (data.players || data.topscorers || data.topScorers || data.data || []);
+  const candidates = stat === "standings"
+    ? [data.standings, data.table, data.rows, data.data?.standings, data.data?.table, data.data?.rows, data.data]
+    : [data.players, data.topscorers, data.topScorers, data.data?.players, data.data?.topscorers, data.data?.topScorers, data.data];
+  let rows = candidates.find(Array.isArray);
+  if (!rows && stat === "standings" && Array.isArray(data.groups)) rows = data.groups.flatMap(group => group.table || group.rows || []);
   if (!Array.isArray(rows)) throw new Error("sports_stats_invalid_response");
-  return { ok: true, type: "sports_stats", stat, league: league.name, rows: rows.slice(0, 20),
+  const normalizedRows = rows.slice(0, 20).map((item, index) => {
+    const team = item?.team || item?.participant || item?.competitor || {};
+    const player = item?.player || item?.athlete || {};
+    const stats = item?.stats || item?.statistics || item?.total || {};
+    const value = keys => {
+      for (const key of keys) {
+        const candidate = item?.[key] ?? stats?.[key];
+        if (candidate !== undefined && candidate !== null && candidate !== "") return candidate;
+      }
+      return null;
+    };
+    if (stat === "standings") return {
+      position: value(["position", "rank", "place"]) ?? index + 1,
+      team: typeof team === "string" ? team : (team.name || team.displayName || item?.team_name || item?.name || "غير معروف"),
+      played: value(["played", "matches", "games", "appearances"]),
+      won: value(["won", "wins"]), drawn: value(["drawn", "draws"]), lost: value(["lost", "losses"]),
+      goalDifference: value(["goalDifference", "goal_difference", "gd"]), points: value(["points", "pts"])
+    };
+    return {
+      position: value(["position", "rank", "place"]) ?? index + 1,
+      player: typeof player === "string" ? player : (player.name || player.displayName || item?.player_name || item?.name || "غير معروف"),
+      team: typeof team === "string" ? team : (team.name || team.displayName || item?.team_name || ""),
+      goals: value(["goals", "goal", "total_goals"]), assists: value(["assists", "assist", "total_assists"]),
+      appearances: value(["appearances", "played", "matches"])
+    };
+  });
+  if (normalizedRows.length && normalizedRows.every(row => (stat === "standings" ? row.team : row.player) === "غير معروف")) throw new Error("sports_stats_invalid_response");
+  return { ok: true, type: "sports_stats", stat, league: league.name, rows: normalizedRows,
     source: "SportScore", attribution: "Powered by SportScore",
     note: "بيانات رياضية خارجية؛ قد تختلف التغطية وتوقيت التحديث حسب المسابقة." };
 }
