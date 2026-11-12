@@ -193,6 +193,29 @@ public class MainActivity extends Activity {
         TextView foot = label("Version 0.6.4 · Voice replies are optional. Remote key mapping uses Accessibility key filtering when supported by the TV.");
         foot.setTextSize(13);
         root.addView(foot);
+
+        TextView supportTitle = label("☕ Buy Me a Coffee");
+        supportTitle.setTextSize(20);
+        supportTitle.setTypeface(null, Typeface.BOLD);
+        supportTitle.setGravity(Gravity.CENTER);
+        root.addView(supportTitle);
+        TextView supportMessage = label("Enjoying Mohamed TV AI Assistant? Support its development. Your support is completely optional.\nهل أعجبك التطبيق؟ يمكنك دعم تطويره بمساهمة اختيارية، شكرًا لك.");
+        supportMessage.setTextSize(15);
+        supportMessage.setGravity(Gravity.CENTER);
+        supportMessage.setTextColor(Color.LTGRAY);
+        root.addView(supportMessage);
+        Button supportButton = button("Support via PayPal / ادعم عبر PayPal");
+        supportButton.setContentDescription("Open the developer's PayPal support page");
+        supportButton.setOnClickListener(v -> {
+            try {
+                Intent payPalIntent = new Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://www.paypal.com/qrcodes/p2pqrc/VV4EEWFUZ8FCU"));
+                startActivity(payPalIntent);
+            } catch (ActivityNotFoundException ignored) {
+                setStatus("تعذر فتح رابط PayPal على هذا الجهاز.");
+            }
+        });
+        root.addView(supportButton);
         if (micButton != null) micButton.requestFocus();
     }
 
