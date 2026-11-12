@@ -21,7 +21,9 @@ android {
     }
     buildTypes {
         debug {
-            // Debug builds are isolated from production device records and API secrets.
+            // Personal test build installs beside the public app and uses isolated staging backend.
+            applicationIdSuffix '.test'
+            versionNameSuffix '-test'
             buildConfigField 'String', 'BACKEND_BASE_URL', '"https://mohamed-tv-ai-backend-staging.mhma26395.workers.dev"'
         }
     }
