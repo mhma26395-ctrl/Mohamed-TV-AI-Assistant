@@ -1,116 +1,67 @@
 # Device authentication — Cloudflare setup and security notes
 
-This is the server-side half of the 0.7.0 per-install authentication protocol. It is committed as source only and is intentionally fail-closed until the Cloudflare bindings and secrets below exist.
+## Production and staging AI provider
+
+Both environments must use the subscribed DeepSeek provider. Production and staging are explicitly configured with:
+
+- `AI_PROVIDER=deepseek`
+- `DEEPSEEK_MODEL=deepseek-flash`
+
+The Worker must have an encrypted `DEEPSEEK_API_KEY` secret in **each environment separately**. Wrangler environments do not inherit secrets. Do not configure or fall back to Groq. The Worker defaults to Groq only when `AI_PROVIDER` is absent; this repository now explicitly sets DeepSeek in both environments to prevent that accidental fallback.
+
+Before deploying production, verify that the production Worker has these encrypted secrets:
+- `SESSION_SIGNING_SECRET`
+- `DEEPSEEK_API_KEY`
+- `DEVICE_ADMIN_SECRET`
+
+Never commit or paste secret values into source control, chat, APK resources, or logs. If the DeepSeek secret currently exists only in staging, add the same valid DeepSeek API key to the production Worker through Cloudflare's encrypted secret interface. Do not expose the key in GitHub Actions logs.
+
+Deploy the default Worker (production) only after confirming the required production bindings and secrets. Deploy staging separately with `--env staging`.
 
 ## Required Worker bindings
 
-Configure these in the Cloudflare Worker environments. The Wrangler file now defines a separate `staging` environment and separate Durable Object namespaces for it:
-
 | Binding | Type | Purpose |
 |---|---|---|
-| `AUTH_DEVICES` | Durable Object namespace bound to `AuthDeviceStore` | Strongly consistent device records and atomic enrollment/revocation |
-| `AUTH_CHALLENGES` | Durable Object namespace bound to `AuthChallengeStore` | Atomic, single-use 120-second challenges |
-| `ENROLL_LIMITER` | Rate limiting binding | Per-IP and per-location aggregate throttling for enrollment/challenge/session issuance |
+| `AUTH_DEVICES` | Durable Object namespace bound to `AuthDeviceStore` | Device records and revocation |
+| `AUTH_CHALLENGES` | Durable Object namespace bound to `AuthChallengeStore` | Single-use authentication challenges |
+| `ENROLL_LIMITER` | Rate limiting binding | Enrollment throttling |
 | `RATE_LIMITER` | Rate limiting binding | Per-IP API throttling |
 | `DEVICE_RATE_LIMITER` | Rate limiting binding | Per-installation API throttling |
-| `ADMIN_LIMITER` | Rate limiting binding | Per-IP throttling for administrative approval and revocation |
+| `ADMIN_LIMITER` | Rate limiting binding | Administrative endpoint throttling |
+| `SECURITY_EVENTS` | Durable Object namespace bound to `SecurityEventStore` | Aggregate security telemetry |
 
-Rate limits are declared in `backend/wrangler.toml` for both the default Worker and the isolated `staging` environment. Cloudflare's Worker Rate Limiting binding supports only 10-second or 60-second periods and is approximate per Cloudflare location; it is not a strict worldwide/global ceiling. The starter production limits are 10 enrollment/session requests, 60 requests per IP, 30 requests per device, and 10 admin requests per minute. Staging is intentionally tighter. Namespace IDs must be unique within the Cloudflare account; replace the sample numeric IDs if already used by another Worker. These limits are abuse-friction controls, not a substitute for strict quota enforcement.
+Rate limits are approximate per Cloudflare location, not strict global quotas. Namespace IDs must be unique within the Cloudflare account.
 
-The default environment's Wrangler Durable Object declarations and migration are already present in `backend/wrangler.toml`; staging has its own repeated bindings and migration tag so its state is isolated. The default environment configuration is:
+## Deployment commands
 
-```toml
-[[durable_objects.bindings]]
-name = "AUTH_CHALLENGES"
-class_name = "AuthChallengeStore"
-
-[[durable_objects.bindings]]
-name = "AUTH_DEVICES"
-class_name = "AuthDeviceStore"
-
-[[migrations]]
-tag = "auth-v1"
-new_sqlite_classes = ["AuthChallengeStore", "AuthDeviceStore"]
-```
-
-Both classes are exported from `backend/worker.js`. The four rate-limit bindings are declared in `backend/wrangler.toml`; no separate dashboard binding creation is needed when deploying with this configuration. Never commit secret values.
-
-## Staging setup (deploy only after review)
-
-The staging Worker name is `mohamed-tv-ai-backend-staging`. Wrangler environments do not inherit secrets, vars, or bindings. Run these commands from the `backend` directory after confirming the sample rate-limit namespace IDs are unused in your Cloudflare account:
+From the `backend` directory:
 
 ```sh
-# Validate only; this does not publish anything.
+# Production dry run; does not publish.
+npx wrangler deploy --dry-run --config wrangler.toml
+
+# Production deployment after checking bindings and secrets.
+npx wrangler deploy --config wrangler.toml
+
+# Add/rotate the production DeepSeek key interactively if it is not already configured.
+npx wrangler secret put DEEPSEEK_API_KEY --config wrangler.toml
+
+# Staging remains isolated and also uses DeepSeek.
 npx wrangler deploy --dry-run --env staging --config wrangler.toml
-
-# First staging deployment creates the isolated Worker and Durable Object namespaces.
-# Until secrets are added, authentication and AI routes intentionally return HTTP 503.
 npx wrangler deploy --env staging --config wrangler.toml
-
-# Add staging-only secrets interactively. Never paste their values into GitHub or chat.
-npx wrangler secret put SESSION_SIGNING_SECRET --env staging --config wrangler.toml
-npx wrangler secret put GROQ_API_KEY --env staging --config wrangler.toml
-npx wrangler secret put DEVICE_ADMIN_SECRET --env staging --config wrangler.toml
+npx wrangler secret put DEEPSEEK_API_KEY --env staging --config wrangler.toml
 ```
 
-Each secret is entered at the terminal prompt and stored encrypted by Cloudflare. Keep staging values different from production. The staging Durable Object migration is tagged `auth-staging-v1`; the default migration remains `auth-v1`. Do not run a default-environment/production deploy during this staging step. The first staging deployment is intentionally safe without secrets because protected routes fail closed with HTTP 503; after all three secrets are added, begin integration tests.
+The secret command prompts securely; never place the key in the command text. The production and staging Workers each require their own secret entry.
 
-## Required secrets
+## Authentication protocol and security notes
 
-- `SESSION_SIGNING_SECRET`: at least 32 cryptographically random bytes, encoded as a long random string. Rotate only with a planned session invalidation.
-- `GROQ_API_KEY`: required for assistant inference only; keep it in Worker secrets.
-- `DEVICE_ADMIN_SECRET`: at least 32 random bytes, stored only as a Worker secret. It protects the administrative device-approval and revocation endpoints. Never put it in the Android app or a public client.
-- The legacy `APP_ACCESS_TOKEN` is no longer used by this Worker authentication path. Remove it from Worker secrets after confirming no older private test client depends on it.
+The Android app uses a P-256 signing key in Android Keystore. It requests short-lived, single-use challenges and receives a short-lived signed session. Every protected API request validates the session and device status, then applies per-device and per-IP rate limits.
 
-Never put any of these values in GitHub, app resources, Gradle files, logs, or the APK.
-
-## Protocol
-
-1. The Android app generates a P-256 signing key pair in Android Keystore and keeps the private key non-exportable.
-2. The app requests a one-time 120-second challenge for a random installation UUID.
-3. For first enrollment, the app signs `enroll|<installId>|<nonce>`; the Worker verifies the signature and stores only the public key and status.
-4. For each new API session, the app requests a fresh challenge and signs `session|<installId>|<nonce>`.
-5. The Worker issues a 10-minute HMAC-SHA256 JWT. Every assistant/info request verifies its signature, expiry, audience, and current device status through the strongly consistent device Durable Object, then applies per-device and per-IP rate limits.
-6. Challenges are consumed atomically by a Durable Object transaction, deleted after use, and expire automatically after 120 seconds. This avoids the read/delete race that a KV-only challenge store would have.
-
-## Revocation
-
-To revoke an installation, invoke the `revoke` operation on the Durable Object identified by the installation UUID. Session validation checks the strongly consistent device record on every API request. For emergency global invalidation, rotate `SESSION_SIGNING_SECRET` and expect all clients to obtain new sessions (the device keys remain enrolled).
-
-## Important limitations — do not overstate the protection
-
-- Administrative approval prevents a new public enrollment from immediately receiving API access, but it does not prove that the caller is an authentic copy of this app. A modified client can create a key and submit a pending enrollment; an administrator must review the request before approval.
-- Per-IP/per-location rate limits and per-device quotas reduce abuse but do not establish app authenticity. Review Cloudflare Turnstile/attestation options compatible with Android TV before claiming stronger anti-abuse guarantees.
-- A random installation UUID is an identifier, not a credential. Device key cloning is harder when the private key is hardware-backed, but hardware-backed storage is not guaranteed on every TV.
-- Android Keystore implementations vary. The app must report key-generation/authentication failure rather than silently fall back to a plain-text or APK-embedded secret.
-- The device registry and challenge store use Durable Objects with transactional storage. Operational availability and correct production migrations still require staging validation.
-- This protocol is not yet independently penetration-tested. Do not publish or describe it as fully secure until replay, key rotation, revocation, concurrency, rate-limit and physical-device tests pass.
+Keep `SESSION_SIGNING_SECRET` and `DEVICE_ADMIN_SECRET` encrypted in Cloudflare. Never put provider keys or administrator secrets in the Android app. This design has not been independently penetration-tested; do not claim independent security certification.
 
 ## Deployment gate
 
-Do not deploy the default/production environment until all six bindings and all three production secrets are configured. For staging only, the first deployment may intentionally occur before secrets are added because protected routes fail closed with HTTP 503; add all three staging secrets immediately afterward, then test all enrollment/session and API flows. The current Worker deliberately returns `503` when required bindings are missing. `AUTH_DEVICES` and `AUTH_CHALLENGES` are declared for both environments in `backend/wrangler.toml`; ensure the matching migration is applied. No staging or production deployment was performed as part of the source changes.
+Do not deploy until all required bindings and all three secrets are configured in the target environment. Protected routes intentionally fail closed with HTTP 503 when configuration is missing. Confirm production's `/v1/health` response reports `provider: "deepseek"` after deployment. Then run integration tests for general questions and live information before publishing a new APK.
 
-
-## Administrator device actions
-
-New installations are activated automatically after the Worker verifies proof of possession of the installation's Android Keystore private key. The app does not need an administrator approval step. Existing pending installations using the same registered public key are promoted to active on their next valid enrollment retry. A different public key cannot replace an existing installation key, and revoked installations remain revoked and cannot self-reactivate.
-
-Administrator revocation remains available from a trusted administrator environment. Never call this endpoint from the Android app or expose the admin secret to users.
-
-Revoke an installation:
-
-```sh
-curl -X POST "https://YOUR-WORKER-DOMAIN/v1/admin/devices/revoke" \
-  -H "Authorization: Bearer $DEVICE_ADMIN_SECRET" \
-  -H "Content-Type: application/json" \
-  --data '{"installId":"DEVICE-UUID-SHOWN-IN-APP"}'
-```
-
-Replace the example domain and UUID before use. Supply the admin secret only through a secure local environment variable. Approval is permitted only from `pending`; a revoked device cannot be re-approved through this endpoint.
-
-
-## Privacy-preserving security telemetry
-
-The Worker now has an optional best-effort `SECURITY_EVENTS` Durable Object binding. It stores only daily aggregate counters for a small allowlist of security event types (currently rate limiting and rejected administrator credentials). It does not store IP addresses, installation IDs, public keys, session tokens, prompts, or assistant responses. Old daily counters are deleted after 30 days. Telemetry failures are deliberately ignored and must never block authentication or assistant requests.
-
-The binding and SQLite Durable Object migration are declared for both the default and isolated staging environments in `wrangler.toml`. This is internal telemetry, not a user-facing dashboard or a push-notification system. It does not yet provide device-level attribution, detailed audit trails, or automatic permanent bans. Existing rate limiters remain the enforcement layer.
+No Cloudflare deployment is performed by editing this repository file alone.

@@ -3,13 +3,13 @@ main = "worker.js"
 compatibility_date = "2026-11-10"
 
 [vars]
-# Model ID is configurable without changing the Android app.
-# This is the selected starting model; confirm the account's free-tier quota before public use.
-GROQ_MODEL = "openai/gpt-oss-120b"
+# Production is intentionally pinned to the subscribed DeepSeek provider.
+AI_PROVIDER = "deepseek"
+DEEPSEEK_MODEL = "deepseek-flash"
 
 # Configure encrypted Worker secrets only; never commit values:
 # wrangler secret put SESSION_SIGNING_SECRET
-# wrangler secret put GROQ_API_KEY
+# wrangler secret put DEEPSEEK_API_KEY
 # wrangler secret put DEVICE_ADMIN_SECRET
 #
 # Rate-limit namespace IDs must be unique within your Cloudflare account.
@@ -64,10 +64,8 @@ new_sqlite_classes = ["SecurityEventStore"]
 workers_dev = true
 
 [env.staging.vars]
-# Isolated staging uses DeepSeek Flash; production continues to default to Groq.
 AI_PROVIDER = "deepseek"
 DEEPSEEK_MODEL = "deepseek-flash"
-GROQ_MODEL = "openai/gpt-oss-120b"
 
 [[env.staging.ratelimits]]
 name = "ENROLL_LIMITER"
