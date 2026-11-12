@@ -840,7 +840,7 @@ export default {
       if (!infoBody || !["time", "weather", "currency", "gold", "news", "sports", "standings", "scorers", "assists"].includes(infoBody.type) ||
           (["time", "weather", "news"].includes(infoBody.type) && (!infoBody.location || typeof infoBody.location !== "string" || !infoBody.location.trim() || infoBody.location.length > 100)) ||
           (["sports", "standings", "scorers", "assists"].includes(infoBody.type) && (typeof infoBody.league !== "string" || !Object.prototype.hasOwnProperty.call(SPORTS_LEAGUES, infoBody.league))) ||
-          (infoBody.type === "sports" && infoBody.date != null && (typeof infoBody.date !== "string" || !/^\d{8}$/.test(infoBody.date))) {
+          (infoBody.type === "sports" && infoBody.date != null && (typeof infoBody.date !== "string" || !/^\d{8}$/.test(infoBody.date)))) {
         return json({ error: "invalid_info_request" }, 400);
       }
       try {
