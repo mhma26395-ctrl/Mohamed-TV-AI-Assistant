@@ -839,8 +839,8 @@ export default {
       const infoBody = body;
       if (!infoBody || !["time", "weather", "currency", "gold", "news", "sports", "standings", "scorers", "assists"].includes(infoBody.type) ||
           (["time", "weather", "news"].includes(infoBody.type) && (!infoBody.location || typeof infoBody.location !== "string" || !infoBody.location.trim() || infoBody.location.length > 100)) ||
-          (infoBody.type === "sports" && (typeof infoBody.league !== "string" || !Object.prototype.hasOwnProperty.call(SPORTS_LEAGUES, infoBody.league) ||
-            (infoBody.date != null && (typeof infoBody.date !== "string" || !/^\d{8}$/.test(infoBody.date)))))) {
+          (["sports", "standings", "scorers", "assists"].includes(infoBody.type) && (typeof infoBody.league !== "string" || !Object.prototype.hasOwnProperty.call(SPORTS_LEAGUES, infoBody.league))) ||
+          (infoBody.type === "sports" && infoBody.date != null && (typeof infoBody.date !== "string" || !/^\d{8}$/.test(infoBody.date))) {
         return json({ error: "invalid_info_request" }, 400);
       }
       try {
@@ -863,7 +863,9 @@ export default {
         // Expose only fixed, sanitized sports-provider categories (never upstream response bodies).
         const safeError = infoBody.type === "sports" && /^sports_provider_(?:timeout|network_error|http_\d{3})$/.test(detail)
           ? detail
-          : "live_info_unavailable";
+          : ["standings", "scorers", "assists"].includes(infoBody.type) && /^sports_stats_(?:timeout|network_error|http_\d{3}|invalid_response)$/.test(detail)
+            ? detail
+            : "live_info_unavailable";
         return json({ ok: false, error: safeError, detail }, 502);
       }
     }
