@@ -839,7 +839,26 @@ export default {
       return json({ error: "provider_rate_limited", retryAfter: upstream.headers.get("retry-after") || null }, 429);
     }
     if (!upstream.ok) {
-      return json({ error: "provider_error", providerStatus: upstream.status }, 502);
+      // Log only provider diagnostics; never log prompts, user data, or API credentials.
+      const providerError = raw.error || {};
+      const providerErrorCode = typeof providerError.code === "string" && /^[A-Za-z0-9_.-]{1,64}$/.test(providerError.code)
+        ? providerError.code
+        : null;
+      const providerErrorType = typeof providerError.type === "string" && /^[A-Za-z0-9_.-]{1,64}$/.test(providerError.type)
+        ? providerError.type
+        : null;
+      console.warn("upstream_provider_error", JSON.stringify({
+        provider: configuredProvider,
+        model,
+        status: upstream.status,
+        code: providerErrorCode,
+        type: providerErrorType
+      }));
+      return json({
+        error: "provider_error",
+        providerStatus: upstream.status,
+        providerCode: providerErrorCode
+      }, 502);
     }
 
     const message = raw.choices?.[0]?.message || {};
