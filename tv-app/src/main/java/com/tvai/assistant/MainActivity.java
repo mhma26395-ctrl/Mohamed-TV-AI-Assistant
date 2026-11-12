@@ -323,7 +323,11 @@ public class MainActivity extends Activity {
         if (has(c, "wifi", "wi-fi", "واي فاي", "الشبكه", "اعدادات الشبكه", "network settings", "internet settings")) {
             launchIntent(new Intent(Settings.ACTION_WIFI_SETTINGS), "Network settings"); return;
         }
-        if (has(c, "developer options", "وضع المطورين", "خيارات المطور", "اعدادات المطور")) {
+        if (has(c, "مساحه التخزين الداخليه", "مساحة التخزين الداخلية", "التخزين الداخلي",
+                "مساحه التخزين", "مساحة التخزين", "internal storage", "storage space", "storage info")) {
+            reply(getStorageReport()); return;
+        }
+        if (has(c, "developer options", "developer mode", "وضع المطورين", "وضع المطور", "خيارات المطور", "خيارات المطورين", "اعدادات المطور")) {
             launchIntent(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS), "Developer options",
                     "تم فتح خيارات المطورين. بعض الخيارات تحتاج تفعيلًا يدويًا. / Developer options opened. Some options must be enabled manually.");
             return;
@@ -416,7 +420,8 @@ public class MainActivity extends Activity {
             else if (has(normalized, "القاهره", "القاهرة")) city = "Cairo";
             else city = "Egypt";
         }
-        if ((asksTime || asksWeather) && city.isEmpty()) {
+        if (asksWeather && city.isEmpty()) city = "Cairo";
+        if (asksTime && city.isEmpty()) {
             reply("حدد المدينة من فضلك، مثل القاهرة أو لندن أو لوس أنجلوس.");
             return true;
         }
@@ -714,6 +719,30 @@ public class MainActivity extends Activity {
         String normalizedRequest = normalize(message);
         final String originalMessage = message;
         final String contextualMessage = buildConversationContext(message);
+
+        // Keep common TV controls and device queries independent from AI availability.
+        boolean explicitOpen = has(normalizedRequest,
+                "افتح", "فتح", "شغل", "شغللي", "اذهب الى", "اذهب الي", "open", "launch", "start", "go to");
+        boolean asksForLocalStorage = has(normalizedRequest,
+                "مساحه التخزين الداخليه", "مساحة التخزين الداخلية", "التخزين الداخلي",
+                "مساحه التخزين", "مساحة التخزين", "internal storage", "storage space", "storage info");
+        boolean asksForLocalTvTarget = explicitOpen && has(normalizedRequest,
+                "يوتيوب", "youtube", "داونلودر", "downloader", "جوجل بلاي", "google play", "play store",
+                "الاعدادات", "اعدادات", "الضبط", "settings", "وضع المطورين", "وضع المطور",
+                "خيارات المطور", "خيارات المطورين", "developer options", "developer mode");
+        if (asksForLocalStorage) {
+            reply(getStorageReport());
+            return;
+        }
+        if (explicitOpen && has(normalizedRequest, "التطبيقات المثبته", "التطبيقات المثبتة", "كل التطبيقات", "installed apps", "all apps")) {
+            showInstalledApps();
+            return;
+        }
+        if (asksForLocalTvTarget) {
+            handleCommand(message);
+            return;
+        }
+        if (explicitOpen && tryLaunchInstalledAppByVoiceName(normalizedRequest)) return;
         if (tryHandleSleepTimerRequest(message, normalizedRequest)) return;
         if (tryHandleLocalAudioCommand(normalizedRequest)) return;
         if (tryHandleLiveInfo(message, normalizedRequest)) return;
@@ -930,6 +959,31 @@ public class MainActivity extends Activity {
         if (pkg == null || pkg.trim().isEmpty()) return false;
         try { getPackageManager().getPackageInfo(pkg, 0); return true; }
         catch (Exception e) { return false; }
+    }
+
+    private boolean tryLaunchInstalledAppByVoiceName(String normalizedRequest) {
+        String target = normalizedRequest
+                .replace("افتح", " ").replace("فتح", " ").replace("شغللي", " ")
+                .replace("شغل", " ").replace("اذهب الى", " ").replace("اذهب الي", " ")
+                .replace("open", " ").replace("launch", " ").replace("start", " ").replace("go to", " ")
+                .trim().replaceAll("\\\\s+", " ");
+        if (target.length() < 3) return false;
+        JSONArray apps = getInstalledLaunchableAppsJson();
+        for (int i = 0; i < apps.length(); i++) {
+            JSONObject app = apps.optJSONObject(i);
+            if (app == null) continue;
+            String appName = normalize(app.optString("name", ""));
+            String packageName = normalize(app.optString("packageName", ""));
+            if (!appName.isEmpty() && (appName.equals(target) || appName.contains(target))) {
+                launchPackage(app.optString("packageName"), app.optString("name"));
+                return true;
+            }
+            if (!packageName.isEmpty() && packageName.equals(target)) {
+                launchPackage(app.optString("packageName"), app.optString("name"));
+                return true;
+            }
+        }
+        return false;
     }
 
     private String getStorageReport() {

@@ -14,6 +14,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 public class CompactAssistantActivity extends MainActivity {
+    private ScrollView answerScrollView;
     @Override protected void buildUi() {
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
@@ -45,14 +46,14 @@ public class CompactAssistantActivity extends MainActivity {
         transcript.setVisibility(View.GONE);
         panel.addView(transcript);
         // Keep the compact window, but make the complete answer reachable with the TV remote.
-        ScrollView answerScroll = new ScrollView(this);
-        answerScroll.setFillViewport(true);
-        answerScroll.setFocusable(true);
-        answerScroll.setFocusableInTouchMode(true);
-        answerScroll.setVerticalScrollBarEnabled(true);
-        answerScroll.setSmoothScrollingEnabled(true);
+        answerScrollView = new ScrollView(this);
+        answerScrollView.setFillViewport(true);
+        answerScrollView.setFocusable(true);
+        answerScrollView.setFocusableInTouchMode(true);
+        answerScrollView.setVerticalScrollBarEnabled(true);
+        answerScrollView.setSmoothScrollingEnabled(true);
         int answerHeight = (int)(getResources().getDisplayMetrics().density * 230);
-        answerScroll.setLayoutParams(new LinearLayout.LayoutParams(
+        answerScrollView.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, answerHeight));
         response = new TextView(this);
         response.setText("تحدث لإعطاء أمر للتلفزيون");
@@ -64,34 +65,36 @@ public class CompactAssistantActivity extends MainActivity {
         response.setSingleLine(false);
         response.setFocusable(false);
         response.setPadding(8, 8, 8, 12);
-        answerScroll.addView(response, new ScrollView.LayoutParams(
+        answerScrollView.addView(response, new ScrollView.LayoutParams(
                 ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
-        answerScroll.setOnKeyListener((v, keyCode, event) -> {
+        answerScrollView.setOnKeyListener((v, keyCode, event) -> {
             if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return true;
             if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
-                answerScroll.smoothScrollBy(0, (int)(150 * getResources().getDisplayMetrics().density));
+                if (!answerScrollView.canScrollVertically(1)) return false;
+                answerScrollView.smoothScrollBy(0, (int)(150 * getResources().getDisplayMetrics().density));
                 return true;
             }
             if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
-                answerScroll.smoothScrollBy(0, -(int)(150 * getResources().getDisplayMetrics().density));
+                if (!answerScrollView.canScrollVertically(-1)) return false;
+                answerScrollView.smoothScrollBy(0, -(int)(150 * getResources().getDisplayMetrics().density));
                 return true;
             }
             return false;
         });
-        panel.addView(answerScroll);
+        panel.addView(answerScrollView);
 
         LinearLayout answerControls = new LinearLayout(this);
         answerControls.setGravity(Gravity.CENTER);
         Button answerUp = new Button(this);
         answerUp.setText("↑ أعلى");
         answerUp.setAllCaps(false);
-        answerUp.setOnClickListener(v -> answerScroll.smoothScrollBy(0,
+        answerUp.setOnClickListener(v -> answerScrollView.smoothScrollBy(0,
                 -(int)(180 * getResources().getDisplayMetrics().density)));
         answerControls.addView(answerUp, new LinearLayout.LayoutParams(0, -2, 1));
         Button answerDown = new Button(this);
         answerDown.setText("↓ باقي الإجابة");
         answerDown.setAllCaps(false);
-        answerDown.setOnClickListener(v -> answerScroll.smoothScrollBy(0,
+        answerDown.setOnClickListener(v -> answerScrollView.smoothScrollBy(0,
                 (int)(180 * getResources().getDisplayMetrics().density)));
         answerControls.addView(answerDown, new LinearLayout.LayoutParams(0, -2, 1));
         panel.addView(answerControls);
@@ -112,6 +115,8 @@ public class CompactAssistantActivity extends MainActivity {
         panel.addView(actions);
 
         setContentView(panel);
+        // Focus the answer area first so remote arrows scroll the response.
+        answerScrollView.requestFocus();
     }
 
     @Override protected void reply(String message) {
@@ -120,6 +125,7 @@ public class CompactAssistantActivity extends MainActivity {
             boolean arabic = message != null && message.matches("(?s).*[\\u0600-\\u06FF].*");
             response.setTextDirection(arabic ? View.TEXT_DIRECTION_FIRST_STRONG_RTL : View.TEXT_DIRECTION_FIRST_STRONG_LTR);
             response.setGravity(arabic ? Gravity.TOP | Gravity.RIGHT : Gravity.TOP | Gravity.LEFT);
+            if (answerScrollView != null) answerScrollView.post(() -> answerScrollView.scrollTo(0, 0));
         }
     }
 
@@ -135,6 +141,15 @@ public class CompactAssistantActivity extends MainActivity {
         p.y = 90;
         getWindow().setAttributes(p);
         getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+    }
+
+    // Handle the TV remote BACK key before child views can consume it.
+    @Override public boolean dispatchKeyEvent(android.view.KeyEvent event) {
+        if (event.getKeyCode() == android.view.KeyEvent.KEYCODE_BACK) {
+            if (event.getAction() == android.view.KeyEvent.ACTION_UP) finish();
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     @Override public void onBackPressed() {
