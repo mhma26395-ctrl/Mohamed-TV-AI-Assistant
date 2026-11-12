@@ -262,13 +262,31 @@ public class MainActivity extends Activity {
             public void onRmsChanged(float r) {}
             public void onBufferReceived(byte[] b) {}
             public void onEndOfSpeech() { setStatus("Processing… / جاري المعالجة…"); }
-            public void onError(int e) { setStatus("Could not recognize speech. Try again / لم أتمكن من فهم الصوت، حاول مجددًا."); }
+            public void onError(int e) {
+                String message;
+                switch (e) {
+                    case SpeechRecognizer.ERROR_AUDIO: message = "مشكلة في تسجيل الصوت. افحص الميكروفون ثم حاول مجددًا."; break;
+                    case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS: message = "إذن الميكروفون غير متاح. فعّل إذن التسجيل للتطبيق."; break;
+                    case SpeechRecognizer.ERROR_NETWORK:
+                    case SpeechRecognizer.ERROR_NETWORK_TIMEOUT: message = "خدمة التعرف على الصوت لم تصل إلى الشبكة. تحقق من الإنترنت أو استخدم الكتابة."; break;
+                    case SpeechRecognizer.ERROR_NO_MATCH:
+                    case SpeechRecognizer.ERROR_SPEECH_TIMEOUT: message = "لم أسمع أمرًا واضحًا. قرّب الريموت وتحدث بعد نغمة الاستماع."; break;
+                    case SpeechRecognizer.ERROR_RECOGNIZER_BUSY: message = "الميكروفون مشغول بطلب سابق. انتظر لحظة ثم حاول."; break;
+                    default: message = "تعذر التعرف على الصوت (رمز " + e + "). يمكنك كتابة الأمر أو المحاولة مرة أخرى."; break;
+                }
+                setStatus(message);
+                if (micButton != null) micButton.setEnabled(true);
+            }
             public void onResults(Bundle b) {
                 ArrayList<String> list = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                if (list != null && !list.isEmpty()) {
-                    transcript.setText("You said / قلت: " + list.get(0));
-                    sendToAi(list.get(0));
+                String best = chooseSpeechCandidate(list);
+                if (best != null && !best.trim().isEmpty()) {
+                    transcript.setText("You said / قلت: " + best);
+                    sendToAi(best);
+                } else {
+                    setStatus("لم يصل نص واضح من خدمة التعرف على الصوت. حاول مجددًا أو اكتب الأمر.");
                 }
+                if (micButton != null) micButton.setEnabled(true);
             }
             public void onPartialResults(Bundle b) {}
             public void onEvent(int e, Bundle p) {}
@@ -277,8 +295,43 @@ public class MainActivity extends Activity {
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, speechLanguage);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, speechLanguage);
-        i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak / تحدث الآن");
-        recognizer.startListening(i);
+        i.putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false);
+        i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
+        i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        i.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
+        i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak clearly / تحدث بوضوح");
+        if (micButton != null) micButton.setEnabled(false);
+        try {
+            recognizer.cancel();
+            recognizer.startListening(i);
+        } catch (Exception e) {
+            if (micButton != null) micButton.setEnabled(true);
+            setStatus("تعذر بدء الميكروفون. أغلق أي تطبيق يستخدمه ثم حاول مجددًا.");
+        }
+    }
+
+    private String chooseSpeechCandidate(ArrayList<String> candidates) {
+        if (candidates == null || candidates.isEmpty()) return null;
+        String best = candidates.get(0);
+        int bestScore = speechIntentScore(normalize(best));
+        for (int i = 1; i < candidates.size(); i++) {
+            String candidate = candidates.get(i);
+            int score = speechIntentScore(normalize(candidate));
+            if (score > bestScore) { best = candidate; bestScore = score; }
+        }
+        return best;
+    }
+
+    private int speechIntentScore(String text) {
+        int score = 0;
+        if (has(text, "يوتيوب", "youtube")) score += 5;
+        if (has(text, "افتح", "فتح", "شغل", "شغللي", "launch", "open")) score += 2;
+        if (has(text, "اعدادات", "الاعدادات", "الضبط", "settings")) score += 5;
+        if (has(text, "الطقس", "طقس", "الجو", "درجه الحراره", "weather")) score += 5;
+        if (has(text, "الدولار", "سعر الصرف", "currency", "usd")) score += 5;
+        if (has(text, "الذهب", "الدهب", "gold")) score += 5;
+        if (has(text, "مساحه التخزين", "التخزين الداخلي", "storage")) score += 5;
+        return score;
     }
 
     private String normalize(String raw) {
@@ -732,7 +785,9 @@ public class MainActivity extends Activity {
     private boolean tryHandleLocalOpenCommand(String raw, String normalized) {
         boolean hasOpenVerb = has(normalized, "افتح", "فتح", "شغل", "شغللي", "شغل لي",
                 "launch", "open", "start", "run", "go to");
-        if (!hasOpenVerb) return false;
+        boolean clearTarget = has(normalized, "يوتيوب", "youtube", "داونلودر", "داون لودر",
+                "دانلودر", "downloader", "جوجل بلاي", "google play", "play store");
+        if (!hasOpenVerb && !clearTarget) return false;
 
         if (has(normalized, "اعدادات vpn", "اعدادات ال vpn", "vpn settings", "افتح vpn", "شغل vpn")) {
             openVpnSettingsOrApp();
