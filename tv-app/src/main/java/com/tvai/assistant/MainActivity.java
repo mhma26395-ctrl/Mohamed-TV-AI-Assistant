@@ -712,6 +712,95 @@ public class MainActivity extends Activity {
                 + "Continue with the missing remaining information. Avoid repeating what was already answered unless needed for continuity.";
     }
 
+    // Handle explicit, unambiguous launch/settings commands locally before contacting the AI provider.
+    // This keeps basic TV controls available even when the provider quota is exhausted.
+    private boolean tryHandleLocalOpenCommand(String raw, String normalized) {
+        boolean hasOpenVerb = has(normalized, "افتح", "فتح", "شغل", "شغللي", "شغل لي",
+                "launch", "open", "start", "run", "go to");
+        if (!hasOpenVerb) return false;
+
+        if (has(normalized, "اعدادات vpn", "اعدادات ال vpn", "vpn settings", "افتح vpn", "شغل vpn")) {
+            openVpnSettingsOrApp();
+            return true;
+        }
+        if (has(normalized, "اعدادات الواي فاي", "اعدادات الشبكه", "اعدادات الشبكة",
+                "wifi settings", "wi-fi settings", "network settings", "internet settings")) {
+            launchIntentWithFallback(new Intent(Settings.ACTION_WIFI_SETTINGS),
+                    new Intent(Settings.ACTION_SETTINGS), "Network settings",
+                    "فتحت إعدادات الشبكة. / Network settings opened.");
+            return true;
+        }
+        if (has(normalized, "خيارات المطور", "اعدادات المطور", "developer options")) {
+            launchIntentWithFallback(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS),
+                    new Intent(Settings.ACTION_SETTINGS), "Developer options",
+                    "فتحت خيارات المطورين إن كانت متاحة. / Developer options opened if available.");
+            return true;
+        }
+        if (has(normalized, "اعدادات اللغه", "اعدادات اللغة", "تغيير اللغه", "تغيير اللغة",
+                "language settings")) {
+            launchIntentWithFallback(new Intent(Settings.ACTION_LOCALE_SETTINGS),
+                    new Intent(Settings.ACTION_SETTINGS), "Language settings",
+                    "فتحت إعدادات اللغة إن كانت متاحة. / Language settings opened if available.");
+            return true;
+        }
+        if (has(normalized, "اعدادات الشاشه", "اعدادات الشاشة", "اعدادات العرض",
+                "display settings", "screen settings")) {
+            launchIntentWithFallback(new Intent(Settings.ACTION_DISPLAY_SETTINGS),
+                    new Intent(Settings.ACTION_SETTINGS), "Display settings",
+                    "فتحت إعدادات الشاشة إن كانت متاحة. / Display settings opened if available.");
+            return true;
+        }
+        if (has(normalized, "اعدادات", "الاعدادات", "الإعدادات", "الضبط", "settings")) {
+            launchIntent(new Intent(Settings.ACTION_SETTINGS), "Settings");
+            return true;
+        }
+
+        if (has(normalized, "يوتيوب", "youtube")) {
+            launchYouTube();
+            return true;
+        }
+
+        String target = normalized;
+        String[] remove = {"من فضلك", "لو سمحت", "من فضلك", "تطبيق", "برنامج",
+                "افتح", "فتح", "شغل لي", "شغللي", "شغل", "launch", "open", "start", "run", "go to"};
+        for (String word : remove) target = target.replace(word, " ");
+        target = target.replaceAll("\\s+", " ").trim();
+        if (target.isEmpty()) return false;
+
+        if (has(target, "داونلودر", "داون لودر", "دانلودر", "داندودا", "downloader")) {
+            launchPackage("com.esaba.downloader", "Downloader");
+            return true;
+        }
+        if (has(target, "جوجل بلاي", "google play", "play store")) {
+            launchPackage("com.android.vending", "Google Play");
+            return true;
+        }
+
+        JSONArray apps = getInstalledLaunchableAppsJson();
+        String matchedPackage = null;
+        String matchedName = null;
+        for (int i = 0; i < apps.length(); i++) {
+            JSONObject app = apps.optJSONObject(i);
+            if (app == null) continue;
+            String appName = normalize(app.optString("name", ""));
+            String packageName = app.optString("packageName", "");
+            if (appName.length() < 3 || packageName.isEmpty()) continue;
+            if (target.equals(appName) || (" " + target + " ").contains(" " + appName + " ")) {
+                if (matchedPackage != null && !matchedPackage.equals(packageName)) {
+                    reply("وجدت أكثر من تطبيق يطابق الاسم. اكتب الاسم الكامل للتطبيق كما يظهر في قائمة التطبيقات.");
+                    return true;
+                }
+                matchedPackage = packageName;
+                matchedName = app.optString("name", packageName);
+            }
+        }
+        if (matchedPackage != null) {
+            launchPackage(matchedPackage, matchedName);
+            return true;
+        }
+        return false;
+    }
+
     protected void sendToAi(String message) {
         if (aiRequestInProgress) {
             reply("هناك طلب جارٍ بالفعل. انتظر الرد الحالي قبل إرسال سؤال آخر / Please wait for the current answer before sending another request.");
@@ -721,6 +810,7 @@ public class MainActivity extends Activity {
         String normalizedRequest = normalize(message);
         final String originalMessage = message;
         final String contextualMessage = buildConversationContext(message);
+        if (tryHandleLocalOpenCommand(message, normalizedRequest)) { aiRequestInProgress = false; return; }
         if (tryHandleSleepTimerRequest(message, normalizedRequest)) { aiRequestInProgress = false; return; }
         if (tryHandleLocalAudioCommand(normalizedRequest)) { aiRequestInProgress = false; return; }
         if (tryHandleLiveInfo(message, normalizedRequest)) { aiRequestInProgress = false; return; }
