@@ -840,11 +840,6 @@ public class MainActivity extends Activity {
     }
 
     protected void sendToAi(String message) {
-        long cooldownRemaining = getGroqCooldownRemainingMs();
-        if (cooldownRemaining > 0L) {
-            reply("تم إيقاف طلبات Groq مؤقتًا لتجنب تكرار الرفض. حاول بعد " + ((cooldownRemaining + 999L) / 1000L) + " ثانية. الأوامر المحلية والمعلومات المباشرة تظل متاحة.");
-            return;
-        }
         if (aiRequestInProgress) {
             reply("هناك طلب جارٍ بالفعل. انتظر الرد الحالي قبل إرسال سؤال آخر / Please wait for the current answer before sending another request.");
             return;
@@ -864,6 +859,11 @@ public class MainActivity extends Activity {
                 "background apps", "apps running in background", "which apps are running")) {
             reply(getRecentAppsReport());
             aiRequestInProgress = false;
+            return;
+        }
+        long cooldownRemaining = getGroqCooldownRemainingMs();
+        if (cooldownRemaining > 0L) {
+            reply("تم إيقاف طلبات Groq مؤقتًا لتجنب تكرار الرفض. حاول بعد " + ((cooldownRemaining + 999L) / 1000L) + " ثانية. الأوامر المحلية والمعلومات المباشرة تظل متاحة.");
             return;
         }
         setStatus("Preparing request… / تجهيز الطلب…");
