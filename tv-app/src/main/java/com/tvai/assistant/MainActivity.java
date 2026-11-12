@@ -63,6 +63,7 @@ import java.util.regex.Pattern;
 public class MainActivity extends Activity {
     protected TextView status, transcript, response;
     private SpeechRecognizer recognizer;
+    private boolean speechListening = false;
     private TextToSpeech tts;
     private boolean ttsReady = false;
     protected String speechLanguage = "ar-EG";
@@ -274,21 +275,72 @@ public class MainActivity extends Activity {
 
     protected void startListening() {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestMicPermission(); setStatus("Microphone permission required / نحتاج إذن الميكروفون"); return;
+            requestMicPermission();
+            setStatus("Microphone permission required / نحتاج إذن الميكروفون");
+            return;
         }
-        if (recognizer == null) { setStatus("Speech recognition is unavailable on this device."); return; }
+        if (speechListening) {
+            setStatus("الاستماع جارٍ بالفعل… انتظر حتى ينتهي.");
+            return;
+        }
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            setStatus("خدمة التعرف على الصوت غير متاحة على هذا الجهاز.");
+            return;
+        }
+        if (recognizer == null) {
+            try { recognizer = SpeechRecognizer.createSpeechRecognizer(this); }
+            catch (Exception e) {
+                setStatus("تعذر تشغيل خدمة التعرف على الصوت على هذا الجهاز.");
+                return;
+            }
+        }
+
+        speechListening = true;
         recognizer.setRecognitionListener(new RecognitionListener() {
             public void onReadyForSpeech(Bundle p) { setStatus("Listening… / أستمع إليك…"); }
-            public void onBeginningOfSpeech() {}
+            public void onBeginningOfSpeech() { setStatus("تم التقاط صوتك… أكمل كلامك."); }
             public void onRmsChanged(float r) {}
             public void onBufferReceived(byte[] b) {}
-            public void onEndOfSpeech() { setStatus("Processing… / جاري المعالجة…"); }
-            public void onError(int e) { setStatus("Could not recognize speech. Try again / لم أتمكن من فهم الصوت، حاول مجددًا."); }
+            public void onEndOfSpeech() { setStatus("Processing… / جاري معالجة الصوت…"); }
+            public void onError(int error) {
+                speechListening = false;
+                String message;
+                switch (error) {
+                    case SpeechRecognizer.ERROR_NO_MATCH:
+                    case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:
+                        message = "لم تلتقط خدمة التعرف على الكلام كلمات كافية. انتظر ظهور «أستمع إليك» ثم تحدث بوضوح وبجملة كاملة.";
+                        break;
+                    case SpeechRecognizer.ERROR_NETWORK:
+                    case SpeechRecognizer.ERROR_NETWORK_TIMEOUT:
+                        message = "تعذر الاتصال بخدمة التعرف على الصوت. تحقق من الإنترنت ثم حاول مرة أخرى.";
+                        break;
+                    case SpeechRecognizer.ERROR_RECOGNIZER_BUSY:
+                        message = "خدمة التعرف على الصوت مشغولة. انتظر لحظة ثم حاول مرة واحدة.";
+                        break;
+                    case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
+                        message = "إذن الميكروفون غير متاح. راجع صلاحية الميكروفون للتطبيق.";
+                        break;
+                    case SpeechRecognizer.ERROR_AUDIO:
+                        message = "حدثت مشكلة في التقاط الصوت من الميكروفون. أغلق أي تطبيق يستخدم الميكروفون ثم حاول.";
+                        break;
+                    default:
+                        message = "تعطلت خدمة التعرف على الصوت (رمز " + error + "). حاول مرة أخرى بعد لحظة.";
+                        break;
+                }
+                setStatus(message);
+                if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) {
+                    resetSpeechRecognizer();
+                }
+            }
             public void onResults(Bundle b) {
+                speechListening = false;
                 ArrayList<String> list = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                if (list != null && !list.isEmpty()) {
-                    transcript.setText("You said / قلت: " + list.get(0));
-                    sendToAi(list.get(0));
+                if (list != null && !list.isEmpty() && list.get(0) != null && !list.get(0).trim().isEmpty()) {
+                    String recognized = list.get(0).trim();
+                    if (transcript != null) transcript.setText("You said / قلت: " + recognized);
+                    sendToAi(recognized);
+                } else {
+                    setStatus("لم تصل كلمات مفهومة من خدمة التعرف على الصوت. حاول مرة أخرى.");
                 }
             }
             public void onPartialResults(Bundle b) {}
@@ -299,7 +351,31 @@ public class MainActivity extends Activity {
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, speechLanguage);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, speechLanguage);
         i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak / تحدث الآن");
-        recognizer.startListening(i);
+        i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L);
+        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1800L);
+        i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+        try {
+            recognizer.startListening(i);
+        } catch (RuntimeException e) {
+            speechListening = false;
+            resetSpeechRecognizer();
+            setStatus("تعذر بدء الاستماع. انتظر لحظة ثم حاول مرة أخرى.");
+        }
+    }
+
+    private void resetSpeechRecognizer() {
+        try {
+            if (recognizer != null) {
+                recognizer.cancel();
+                recognizer.destroy();
+            }
+        } catch (Exception ignored) {}
+        recognizer = null;
+        if (!isFinishing() && !isDestroyed() && SpeechRecognizer.isRecognitionAvailable(this)) {
+            try { recognizer = SpeechRecognizer.createSpeechRecognizer(this); }
+            catch (Exception ignored) { recognizer = null; }
+        }
     }
 
     private String normalize(String raw) {
@@ -1660,8 +1736,13 @@ public class MainActivity extends Activity {
             Shizuku.removeRequestPermissionResultListener(shizukuPermissionResult);
         } catch (Exception ignored) {}
         network.shutdownNow();
-        if (recognizer != null) { recognizer.destroy(); recognizer = null; }
-        if (tts != null) { tts.stop(); tts.shutdown(); }
+        speechListening = false;
+        if (recognizer != null) {
+            try { recognizer.cancel(); recognizer.destroy(); } catch (Exception ignored) {}
+            recognizer = null;
+        }
+        if (tts != null) { try { tts.stop(); tts.shutdown(); } catch (Exception ignored) {} tts = null; }
+        ttsReady = false;
         super.onDestroy();
     }
 }
