@@ -734,10 +734,15 @@ public class MainActivity extends Activity {
             reply(getStorageReport());
             return;
         }
+        if (explicitOpen && has(normalizedRequest, "التطبيقات المثبته", "التطبيقات المثبتة", "كل التطبيقات", "installed apps", "all apps")) {
+            showInstalledApps();
+            return;
+        }
         if (asksForLocalTvTarget) {
             handleCommand(message);
             return;
         }
+        if (explicitOpen && tryLaunchInstalledAppByVoiceName(normalizedRequest)) return;
         if (tryHandleSleepTimerRequest(message, normalizedRequest)) return;
         if (tryHandleLocalAudioCommand(normalizedRequest)) return;
         if (tryHandleLiveInfo(message, normalizedRequest)) return;
@@ -954,6 +959,31 @@ public class MainActivity extends Activity {
         if (pkg == null || pkg.trim().isEmpty()) return false;
         try { getPackageManager().getPackageInfo(pkg, 0); return true; }
         catch (Exception e) { return false; }
+    }
+
+    private boolean tryLaunchInstalledAppByVoiceName(String normalizedRequest) {
+        String target = normalizedRequest
+                .replace("افتح", " ").replace("فتح", " ").replace("شغللي", " ")
+                .replace("شغل", " ").replace("اذهب الى", " ").replace("اذهب الي", " ")
+                .replace("open", " ").replace("launch", " ").replace("start", " ").replace("go to", " ")
+                .trim().replaceAll("\\\\s+", " ");
+        if (target.length() < 3) return false;
+        JSONArray apps = getInstalledLaunchableAppsJson();
+        for (int i = 0; i < apps.length(); i++) {
+            JSONObject app = apps.optJSONObject(i);
+            if (app == null) continue;
+            String appName = normalize(app.optString("name", ""));
+            String packageName = normalize(app.optString("packageName", ""));
+            if (!appName.isEmpty() && (appName.equals(target) || appName.contains(target))) {
+                launchPackage(app.optString("packageName"), app.optString("name"));
+                return true;
+            }
+            if (!packageName.isEmpty() && packageName.equals(target)) {
+                launchPackage(app.optString("packageName"), app.optString("name"));
+                return true;
+            }
+        }
+        return false;
     }
 
     private String getStorageReport() {
