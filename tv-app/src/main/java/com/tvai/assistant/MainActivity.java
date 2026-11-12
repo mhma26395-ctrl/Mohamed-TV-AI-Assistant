@@ -478,7 +478,8 @@ public class MainActivity extends Activity {
         String[][] cities = {
             {"القاهرة","القاهره","cairo"}, {"لندن","london"}, {"لوس انجلوس","los angeles"},
             {"نيويورك","new york"}, {"باريس","paris"}, {"الرياض","riyadh"}, {"دبي","dubai"},
-            {"مكه","مكة","mecca"}, {"طوكيو","tokyo"}, {"اسطنبول","istanbul"}
+            {"مكه","مكة","mecca"}, {"طوكيو","tokyo"}, {"اسطنبول","istanbul"},
+            {"واشنطن","واشنطون","واشنطن دي سي","وانشنطن","وانشنز","washington","washington dc"}
         };
         for (String[] group : cities) for (String city : group) {
             if (normalized.contains(city)) {
@@ -492,6 +493,7 @@ public class MainActivity extends Activity {
                 if ("مكه".equals(city) || "مكة".equals(city)) return "Mecca";
                 if ("طوكيو".equals(city)) return "Tokyo";
                 if ("اسطنبول".equals(city)) return "Istanbul";
+                if (city.contains("واشن") || city.contains("وانشن") || city.startsWith("washington")) return "Washington";
                 return city;
             }
         }
