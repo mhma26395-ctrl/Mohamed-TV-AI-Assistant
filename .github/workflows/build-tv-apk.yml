@@ -1,4 +1,5 @@
 name: Build Mohamed TV AI Assistant APK
+# Staging branch builds are isolated and verified against the staging application ID.
 on:
   push:
     branches: [main, 'fix/compact-scroll-and-local-dev-settings', 'feature/deepseek-staging-apk']
