@@ -1,6 +1,7 @@
 plugins { id 'com.android.application' }
 
 dependencies {
+    implementation 'com.google.zxing:core:3.5.3'
     implementation 'dev.rikka.shizuku:api:13.1.5'
     implementation 'dev.rikka.shizuku:provider:13.1.5'
 }
@@ -15,8 +16,8 @@ android {
         applicationId 'com.tvai.assistant.next'
         minSdk 26
         targetSdk 34
-        versionCode 22
-        versionName '0.7.0'
+        versionCode 23
+        versionName '0.7.1'
         buildConfigField 'String', 'BACKEND_BASE_URL', '"https://mohamed-tv-ai-backend.mhma26395.workers.dev"'
     }
     signingConfigs {
