@@ -375,13 +375,18 @@ public class MainActivity extends Activity {
 
     private String detectInfoCity(String normalized) {
         String[][] cities = {
-            {"القاهرة","القاهره","cairo"}, {"لندن","london"}, {"لوس انجلوس","los angeles"},
-            {"نيويورك","new york"}, {"باريس","paris"}, {"الرياض","riyadh"}, {"دبي","dubai"},
-            {"مكه","مكة","mecca"}, {"طوكيو","tokyo"}, {"اسطنبول","istanbul"}
+            {"القاهرة","القاهره","cairo"}, {"الإسكندرية","الاسكندرية","اسكندريه","alexandria"},
+            {"الجيزة","الجيزه","giza"}, {"المنيا","minya"}, {"لندن","london"},
+            {"لوس انجلوس","los angeles"}, {"نيويورك","new york"}, {"باريس","paris"},
+            {"الرياض","riyadh"}, {"دبي","dubai"}, {"مكه","مكة","mecca"},
+            {"طوكيو","tokyo"}, {"اسطنبول","istanbul"}
         };
         for (String[] group : cities) for (String city : group) {
             if (normalized.contains(city)) {
                 if ("القاهره".equals(city)) return "Cairo";
+                if ("الإسكندرية".equals(city) || "الاسكندرية".equals(city) || "اسكندريه".equals(city)) return "Alexandria";
+                if ("الجيزة".equals(city) || "الجيزه".equals(city)) return "Giza";
+                if ("المنيا".equals(city)) return "Minya";
                 if ("لندن".equals(city)) return "London";
                 if ("لوس انجلوس".equals(city)) return "Los Angeles";
                 if ("نيويورك".equals(city)) return "New York";
@@ -401,8 +406,14 @@ public class MainActivity extends Activity {
 
     private boolean tryHandleLiveInfo(String raw, String normalized) {
         boolean asksTime = has(normalized, "الوقت", "الساعه كام", "كم الساعه", "time now", "current time", "what time");
-        boolean asksWeather = has(normalized, "الطقس", "الجو", "درجه الحراره", "حاله الطقس", "weather", "temperature", "forecast");
-        boolean asksGold = has(normalized, "الذهب", "سعر الذهب", "gold price", "gold rate");
+        // Accept common Egyptian Arabic voice-recognition variants so live data
+        // requests are routed to /v1/info instead of consuming a Groq completion.
+        boolean asksWeather = has(normalized, "الطقس", "طقس", "الجو", "حاله الجو",
+                "حاله الطقس", "درجه الحراره", "درجه الحرارة", "الحراره", "الحرارة",
+                "الجو عامل", "weather", "temperature", "forecast");
+        boolean asksGold = has(normalized, "الذهب", "ذهب", "الدهب", "دهب",
+                "سعر جرام الذهب", "جرام الذهب", "جرام الدهب", "عيار 21", "عيار 24",
+                "عيار 18", "gold price", "gold rate");
         boolean asksCurrency = has(normalized, "سعر الدولار", "الدولار اليوم", "سعر العمله", "سعر العملات", "exchange rate", "currency rate", "usd egp", "dollar today");
         boolean asksNews = has(normalized, "الاخبار", "اخبار", "اخر الاخبار", "news", "headlines");
         boolean asksSports = has(normalized, "مباريات", "مباراه", "مباراة", "جدول مباريات",
