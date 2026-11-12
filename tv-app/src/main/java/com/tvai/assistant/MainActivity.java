@@ -1434,13 +1434,13 @@ public class MainActivity extends Activity {
 
     private boolean tryHandleYouTubeSearch(String raw, String normalized) {
         boolean mentionsYouTube = has(normalized, "يوتيوب", "youtube");
-        boolean contentRequest = has(normalized, "اغنيه", "اغاني", "قناه", "فيديو", "ابحث", "دور على", "شغل", "اعرض", "search");
+        boolean contentRequest = has(normalized, "اغنيه", "اغاني", "قناه", "فيديو", "ابحث", "دور على", "شغل", "اعرض", "search", "رشح", "ترشيح", "فيلم", "افلام", "مسلسل", "مسلسلات", "كامل", "movie", "movies", "film", "series", "recommend");
         if (!mentionsYouTube || !contentRequest) return false;
 
         String query = normalized;
         String[] remove = {"من اليوتيوب", "على اليوتيوب", "في اليوتيوب", "باليوتيوب", "على youtube", "in youtube", "on youtube",
                 "ابحث لي عن", "ابحث عن", "ابحث", "دور على", "دورلي على", "شغل لي", "شغل", "افتح", "اعرض لي", "اعرض",
-                "اغنيه", "اغاني", "قناه", "فيديو", "youtube", "يوتيوب", "من فضلك", "لو سمحت"};
+                "اغنيه", "اغاني", "قناه", "فيديو", "رشح لي", "رشح", "ترشيح", "فيلم", "افلام", "مسلسل", "مسلسلات", "كامل", "movie", "movies", "film", "series", "recommend", "youtube", "يوتيوب", "من فضلك", "لو سمحت"};
         for (String part : remove) query = query.replace(part, " ");
         query = query.replaceAll("\\s+", " ").trim();
         if (query.isEmpty()) {
