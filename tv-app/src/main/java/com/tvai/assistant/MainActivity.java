@@ -525,9 +525,24 @@ public class MainActivity extends Activity {
                         JSONObject row = rows.optJSONObject(i);
                         if (row == null) continue;
                         String name = row.optString("team", row.optString("player", row.optString("name", "غير معروف")));
-                        String value = row.optString("points", row.optString("goals", row.optString("assists", "")));
-                        statsText.append("\\n").append(i + 1).append(". ").append(name);
-                        if (!value.isEmpty()) statsText.append(" — ").append(value);
+                        statsText.append("\\n").append(row.optInt("position", i + 1)).append(". ").append(name);
+                        if ("standings".equals(type)) {
+                            String played = row.optString("played", "");
+                            String won = row.optString("won", "");
+                            String drawn = row.optString("drawn", "");
+                            String lost = row.optString("lost", "");
+                            String points = row.optString("points", "");
+                            if (!played.isEmpty()) statsText.append(" | لعب: ").append(played);
+                            if (!won.isEmpty()) statsText.append(" | فاز: ").append(won);
+                            if (!drawn.isEmpty()) statsText.append(" | تعادل: ").append(drawn);
+                            if (!lost.isEmpty()) statsText.append(" | خسر: ").append(lost);
+                            if (!points.isEmpty()) statsText.append(" | النقاط: ").append(points);
+                        } else {
+                            String goals = row.optString("goals", "");
+                            String assistsCount = row.optString("assists", "");
+                            if (!goals.isEmpty()) statsText.append(" | الأهداف: ").append(goals);
+                            if (!assistsCount.isEmpty()) statsText.append(" | الصناعة: ").append(assistsCount);
+                        }
                     }
                     statsText.append("\\nالمصدر: SportScore");
                     answer = statsText.toString();
