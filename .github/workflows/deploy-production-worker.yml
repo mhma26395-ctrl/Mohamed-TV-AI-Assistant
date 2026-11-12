@@ -1,6 +1,10 @@
 name: Deploy and verify Mohamed TV AI backend - PRODUCTION
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-production-worker.yml'
   workflow_dispatch:
 
 permissions:
