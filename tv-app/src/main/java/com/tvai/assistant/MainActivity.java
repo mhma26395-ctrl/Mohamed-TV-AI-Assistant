@@ -323,7 +323,7 @@ public class MainActivity extends Activity {
         if (has(c, "wifi", "wi-fi", "واي فاي", "الشبكه", "اعدادات الشبكه", "network settings", "internet settings")) {
             launchIntent(new Intent(Settings.ACTION_WIFI_SETTINGS), "Network settings"); return;
         }
-        if (has(c, "developer options", "وضع المطورين", "خيارات المطور", "اعدادات المطور")) {
+        if (has(c, "developer options", "developer mode", "وضع المطورين", "وضع المطور", "خيارات المطور", "خيارات المطورين", "اعدادات المطور")) {
             launchIntent(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS), "Developer options",
                     "تم فتح خيارات المطورين. بعض الخيارات تحتاج تفعيلًا يدويًا. / Developer options opened. Some options must be enabled manually.");
             return;
@@ -714,6 +714,17 @@ public class MainActivity extends Activity {
         String normalizedRequest = normalize(message);
         final String originalMessage = message;
         final String contextualMessage = buildConversationContext(message);
+
+        // Route explicit developer-settings requests locally before any Groq/backend call.
+        boolean asksToOpenDeveloperSettings = has(normalizedRequest,
+                "افتح", "فتح", "شغل", "اذهب الى", "اذهب الي", "open", "launch", "go to")
+                && has(normalizedRequest,
+                "وضع المطورين", "وضع المطور", "خيارات المطور", "خيارات المطورين",
+                "اعدادات المطور", "developer options", "developer mode");
+        if (asksToOpenDeveloperSettings) {
+            handleCommand(message);
+            return;
+        }
         if (tryHandleSleepTimerRequest(message, normalizedRequest)) return;
         if (tryHandleLocalAudioCommand(normalizedRequest)) return;
         if (tryHandleLiveInfo(message, normalizedRequest)) return;
