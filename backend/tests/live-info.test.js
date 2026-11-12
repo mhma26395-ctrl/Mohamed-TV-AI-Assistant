@@ -11,7 +11,7 @@ test("currency lookup uses requested pair and returns dated reference rate", asy
     });
   };
   const result = await getCurrencyInfo("usd", "egp", fetcher);
-  assert.equal(requestedUrl, "https://api.frankfurter.app/latest?from=USD&to=EGP");
+  assert.equal(requestedUrl, "https://api.frankfurter.dev/v1/latest?from=USD&to=EGP");
   assert.equal(result.ok, true);
   assert.equal(result.rate, 49.75);
   assert.equal(result.date, "2026-11-11");
@@ -25,10 +25,16 @@ test("currency lookup rejects invalid codes without calling provider", async () 
   assert.equal(called, false);
 });
 
-test("currency lookup never invents a missing currency pair", async () => {
-  const result = await getCurrencyInfo("USD", "EGP", async () => new Response(JSON.stringify({ rates: {} }), { status: 200 }));
-  assert.equal(result.ok, false);
-  assert.equal(result.error, "currency_pair_unavailable");
+test("currency lookup fails safely when primary and fallback providers have no pair", async () => {
+  let calls = 0;
+  await assert.rejects(
+    () => getCurrencyInfo("USD", "EGP", async () => {
+      calls++;
+      return new Response(JSON.stringify({ rates: {} }), { status: 200 });
+    }),
+    /exchange_rate_provider_unavailable/
+  );
+  assert.equal(calls, 2);
 });
 
 test("sports lookup maps the Egyptian league, preserves requested date and parses matches", async () => {
