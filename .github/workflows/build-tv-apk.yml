@@ -32,8 +32,12 @@ jobs:
         run: gradle assembleDebug
       - name: Verify APK output and staging identity
         run: |
-          test -s tv-app/build/outputs/apk/debug/tv-app-debug.apk
-          aapt dump badging tv-app/build/outputs/apk/debug/tv-app-debug.apk | grep -q "package: name='com.tvai.assistant.next.staging'"
+          set -euo pipefail
+          APK="tv-app/build/outputs/apk/debug/tv-app-debug.apk"
+          test -s "$APK"
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)
+          test -n "$AAPT"
+          "$AAPT" dump badging "$APK" | grep -F "package: name='com.tvai.assistant.next.staging'"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
