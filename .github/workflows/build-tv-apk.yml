@@ -1,7 +1,7 @@
 name: Build Mohamed TV AI Assistant APK
 on:
   push:
-    branches: [main, 'fix/compact-scroll-and-local-dev-settings', 'feature/deepseek-staging-apk']
+    branches: [main, 'fix/compact-scroll-and-local-dev-settings', 'feature/deepseek-staging-apk', 'fix/staging-sports-400-diagnostics']
   workflow_dispatch:
 permissions:
   contents: read
