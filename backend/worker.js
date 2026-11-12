@@ -790,7 +790,12 @@ export default {
                   : await getNewsInfo(infoBody.location, infoBody.locale);
         return json(data, data.ok ? 200 : 404);
       } catch (error) {
-        return json({ ok: false, error: "live_info_unavailable", detail: error?.message || "provider_error" }, 502);
+        const detail = error?.message || "provider_error";
+        // Expose only fixed, sanitized sports-provider categories (never upstream response bodies).
+        const safeError = infoBody.type === "sports" && /^sports_provider_(?:timeout|network_error|http_\d{3})$/.test(detail)
+          ? detail
+          : "live_info_unavailable";
+        return json({ ok: false, error: safeError, detail }, 502);
       }
     }
 
