@@ -143,6 +143,15 @@ public class CompactAssistantActivity extends MainActivity {
         getWindow().setBackgroundDrawableResource(android.R.color.transparent);
     }
 
+    // Handle the TV remote BACK key before child views can consume it.
+    @Override public boolean dispatchKeyEvent(android.view.KeyEvent event) {
+        if (event.getKeyCode() == android.view.KeyEvent.KEYCODE_BACK) {
+            if (event.getAction() == android.view.KeyEvent.ACTION_UP) finish();
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
     @Override public void onBackPressed() {
         finish();
     }
