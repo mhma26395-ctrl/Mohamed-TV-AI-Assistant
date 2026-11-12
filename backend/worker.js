@@ -413,7 +413,7 @@ export async function getSportsLeadersInfo(leagueKey, stat = "standings", fetche
   if (!response.ok) throw new Error("sports_stats_http_" + response.status);
   const data = await response.json();
   const candidates = stat === "standings"
-    ? [data.standings, data.table, data.rows, data.data?.standings, data.data?.table, data.data?.rows, data.data]
+    ? [data.standings, data.table, data.rows, data.data?.standings, data.data?.table, data.data?.rows, data.data, ...(Array.isArray(data.tables) ? [data.tables.flatMap(group => group.rows || [])] : [])]
     : [data.players, data.topscorers, data.topScorers, data.data?.players, data.data?.topscorers, data.data?.topScorers, data.data];
   let rows = candidates.find(Array.isArray);
   if (!rows && stat === "standings" && Array.isArray(data.groups)) rows = data.groups.flatMap(group => group.table || group.rows || []);
@@ -430,10 +430,10 @@ export async function getSportsLeadersInfo(leagueKey, stat = "standings", fetche
       return null;
     };
     if (stat === "standings") return {
-      position: value(["position", "rank", "place"]) ?? index + 1,
+      position: value(["position", "rank", "place", "pos"]) ?? index + 1,
       team: typeof team === "string" ? team : (team.name || team.displayName || item?.team_name || item?.name || "غير معروف"),
-      played: value(["played", "matches", "games", "appearances"]),
-      won: value(["won", "wins"]), drawn: value(["drawn", "draws"]), lost: value(["lost", "losses"]),
+      played: value(["played", "matches", "games", "appearances", "p"]),
+      won: value(["won", "wins", "w"]), drawn: value(["drawn", "draws", "d"]), lost: value(["lost", "losses", "l"]),
       goalDifference: value(["goalDifference", "goal_difference", "gd"]), points: value(["points", "pts"])
     };
     return {
