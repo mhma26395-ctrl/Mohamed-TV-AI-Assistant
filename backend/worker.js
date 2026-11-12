@@ -249,11 +249,11 @@ async function getWeatherInfo(location, locale) {
 }
 
 
-async function getCurrencyInfo(from, to) {
+export async function getCurrencyInfo(from, to, fetcher = fetch) {
   const base = String(from || "USD").toUpperCase();
   const quote = String(to || "EGP").toUpperCase();
   if (!/^[A-Z]{3}$/.test(base) || !/^[A-Z]{3}$/.test(quote)) return { ok: false, error: "invalid_currency" };
-  const response = await fetch("https://api.frankfurter.app/latest?from=" + base + "&to=" + quote, { signal: AbortSignal.timeout(12000) });
+  const response = await fetcher("https://api.frankfurter.app/latest?from=" + base + "&to=" + quote, { signal: AbortSignal.timeout(12000) });
   if (!response.ok) throw new Error("exchange_rate_provider_unavailable");
   const data = await response.json();
   const rate = data.rates?.[quote];
@@ -336,17 +336,22 @@ const SPORTS_LEAGUES = {
   "spanish-la-liga": { code: "esp.1", name: "الدوري الإسباني" }
 };
 
-async function getSportsInfo(leagueKey, dateValue, locale) {
+export async function getSportsInfo(leagueKey, dateValue, locale, fetcher = fetch) {
   const league = SPORTS_LEAGUES[leagueKey];
   if (!league) return { ok: false, error: "unsupported_league" };
-  const date = /^\d{8}$/.test(String(dateValue || "")) ? String(dateValue) :
-    new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" })
-      .format(new Date()).replace(/-/g, "");
+  // Build YYYYMMDD from explicit parts; avoid locale-specific format order.
+  const date = /^\d{8}$/.test(String(dateValue || "")) ? String(dateValue) : (() => {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit"
+    }).formatToParts(new Date());
+    const part = type => parts.find(item => item.type === type)?.value || "";
+    return part("year") + part("month") + part("day");
+  })();
   const url = "https://site.api.espn.com/apis/site/v2/sports/soccer/" +
     league.code + "/scoreboard?dates=" + date;
   let response;
   try {
-    response = await fetch(url, { signal: AbortSignal.timeout(12000), headers: { "accept": "application/json" } });
+    response = await fetcher(url, { signal: AbortSignal.timeout(12000), headers: { "accept": "application/json" } });
   } catch (error) {
     const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
     throw new Error(timedOut ? "sports_provider_timeout" : "sports_provider_network_error");
