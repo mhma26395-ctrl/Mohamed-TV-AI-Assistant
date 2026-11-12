@@ -756,6 +756,8 @@ public class MainActivity extends Activity {
         }
 
         if (has(normalized, "يوتيوب", "youtube")) {
+            // Preserve the existing dedicated YouTube search flow for content queries.
+            if (has(normalized, "ابحث", "دور على", "فيديو", "اغنيه", "اغاني", "قناه", "search")) return false;
             launchYouTube();
             return true;
         }
