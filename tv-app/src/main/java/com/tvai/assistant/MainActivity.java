@@ -818,7 +818,33 @@ public class MainActivity extends Activity {
         return false;
     }
 
+    private long getGroqCooldownRemainingMs() {
+        long until = getSharedPreferences("assistant_settings", MODE_PRIVATE).getLong("groq_cooldown_until", 0L);
+        return Math.max(0L, until - System.currentTimeMillis());
+    }
+
+    private long parseGroqWaitMs(String retryAfter, String providerMessage) {
+        long seconds = 30L;
+        try {
+            if (retryAfter != null && retryAfter.trim().matches("\\d{1,8}")) seconds = Long.parseLong(retryAfter.trim());
+            else if (providerMessage != null) {
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)(\\d+(?:\\.\\d+)?)\\s*(seconds?|secs?|s|minutes?|mins?|hours?|hrs?|h)").matcher(providerMessage);
+                if (m.find()) {
+                    double amount = Double.parseDouble(m.group(1));
+                    String unit = m.group(2).toLowerCase(Locale.ROOT);
+                    seconds = (long) Math.ceil(amount * (unit.startsWith("h") ? 3600d : unit.startsWith("m") ? 60d : 1d));
+                }
+            }
+        } catch (Exception ignored) { seconds = 30L; }
+        return Math.max(10L, Math.min(seconds, 86400L)) * 1000L;
+    }
+
     protected void sendToAi(String message) {
+        long cooldownRemaining = getGroqCooldownRemainingMs();
+        if (cooldownRemaining > 0L) {
+            reply("تم إيقاف طلبات Groq مؤقتًا لتجنب تكرار الرفض. حاول بعد " + ((cooldownRemaining + 999L) / 1000L) + " ثانية. الأوامر المحلية والمعلومات المباشرة تظل متاحة.");
+            return;
+        }
         if (aiRequestInProgress) {
             reply("هناك طلب جارٍ بالفعل. انتظر الرد الحالي قبل إرسال سؤال آخر / Please wait for the current answer before sending another request.");
             return;
@@ -899,7 +925,10 @@ public class MainActivity extends Activity {
                     String resetTokens = result.optString("resetTokens", "");
                     String messageText = "تعذر الاتصال بالمساعد: " + error + " (" + code + ")";
                     if (code == 429 && "provider_rate_limited".equals(error)) {
-                        messageText = "Groq رفض الطلب بسبب أحد حدود الاستخدام. ";
+                        long waitMs = parseGroqWaitMs(retryAfter, providerMessage);
+                        getSharedPreferences("assistant_settings", MODE_PRIVATE).edit()
+                                .putLong("groq_cooldown_until", System.currentTimeMillis() + waitMs).apply();
+                        messageText = "Groq وصل إلى حد الاستخدام. أوقفت إعادة المحاولة مؤقتًا. انتظر " + ((waitMs + 999L) / 1000L) + " ثانية ثم حاول. ";
                         if (!providerMessage.isEmpty() && !"null".equals(providerMessage)) messageText += providerMessage + " ";
                         if (!retryAfter.isEmpty() && !"null".equals(retryAfter)) messageText += "وقت الانتظار: " + retryAfter + ". ";
                         if (!remainingRequests.isEmpty() && !"null".equals(remainingRequests)) messageText += "الطلبات المتبقية: " + remainingRequests + ". ";
