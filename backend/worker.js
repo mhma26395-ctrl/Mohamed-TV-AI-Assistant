@@ -837,7 +837,7 @@ export default {
 
     if (url.pathname === "/v1/info") {
       const infoBody = body;
-      if (!infoBody || !["time", "weather", "currency", "gold", "news", "sports"].includes(infoBody.type) ||
+      if (!infoBody || !["time", "weather", "currency", "gold", "news", "sports", "standings", "scorers", "assists"].includes(infoBody.type) ||
           (["time", "weather", "news"].includes(infoBody.type) && (!infoBody.location || typeof infoBody.location !== "string" || !infoBody.location.trim() || infoBody.location.length > 100)) ||
           (infoBody.type === "sports" && (typeof infoBody.league !== "string" || !Object.prototype.hasOwnProperty.call(SPORTS_LEAGUES, infoBody.league) ||
             (infoBody.date != null && (typeof infoBody.date !== "string" || !/^\d{8}$/.test(infoBody.date)))))) {
@@ -854,7 +854,9 @@ export default {
                 ? await getGoldInfo(infoBody.currency || "EGP")
                 : infoBody.type === "sports"
                   ? await getSportsInfo(infoBody.league, infoBody.date, infoBody.locale)
-                  : await getNewsInfo(infoBody.location, infoBody.locale);
+                  : ["standings", "scorers", "assists"].includes(infoBody.type)
+                    ? await getSportsLeadersInfo(infoBody.league, infoBody.type)
+                    : await getNewsInfo(infoBody.location, infoBody.locale);
         return json(data, data.ok ? 200 : 404);
       } catch (error) {
         const detail = error?.message || "provider_error";
