@@ -745,7 +745,7 @@ public class MainActivity extends Activity {
                     "فتحت إعدادات الشبكة. / Network settings opened.");
             return true;
         }
-        if (has(normalized, "خيارات المطور", "اعدادات المطور", "developer options")) {
+        if (has(normalized, "وضع المطورين", "وضع المطور", "خيارات المطور", "خيارات المطورين", "اعدادات المطور", "اعدادات وضع المطورين", "developer options", "developer mode")) {
             launchIntentWithFallback(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS),
                     new Intent(Settings.ACTION_SETTINGS), "Developer options",
                     "فتحت خيارات المطورين إن كانت متاحة. / Developer options opened if available.");
