@@ -387,10 +387,10 @@ export async function getSportsInfo(leagueKey, dateValue, locale, fetcher = fetc
 }
 
 const SPORT_SCORE_SLUGS = {
-  "egyptian-premier-league": "56ypq3nh01nmd7o",
-  "saudi-pro-league": "j1l4rjnh66nm7vx",
-  "english-premier-league": "jednm9whz0ryox8",
-  "spanish-la-liga": "vl7oqdehlyr510j"
+  "egyptian-premier-league": "egyptian-premier-league",
+  "saudi-pro-league": "saudi-professional-league",
+  "english-premier-league": "english-premier-league",
+  "spanish-la-liga": "spanish-la-liga"
 };
 
 export async function getSportsLeadersInfo(leagueKey, stat = "standings", fetcher = fetch) {
