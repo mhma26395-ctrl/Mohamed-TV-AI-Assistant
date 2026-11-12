@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
@@ -100,6 +100,7 @@ jobs:
           fi
           cp "$APK_PATH" dist/Mohamed-TV-AI-Assistant-0.7.0.apk
           sha256sum dist/Mohamed-TV-AI-Assistant-0.7.0.apk | tee dist/SHA256SUMS.txt
+          cp dist/Mohamed-TV-AI-Assistant-0.7.0.apk dist/tv-app-release.apk
           echo "Package, version and signing certificate checks passed."
 
       - name: Upload verified APK for final release publication
@@ -111,3 +112,29 @@ jobs:
             dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish verified APK to the existing GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload v0.6.9 \
+            dist/tv-app-release.apk#Mohamed-TV-AI-Assistant-0.7.0.apk \
+            dist/SHA256SUMS.txt \
+            --clobber
+          cat > dist/release-notes.md <<'EOF'
+          # Mohamed TV AI Assistant 0.7.0
+
+          Built from the latest `main` branch and signed with the same production certificate as the previous release. Package identity and upgrade-signature compatibility were verified before publication.
+
+          ## Installation
+          Download `tv-app-release.apk` from the Assets section and install it over the existing app. Your app data should remain intact when Android accepts the matching signature.
+
+          ## Version
+          - Version name: 0.7.0
+          - Version code: 22
+          - Package: `com.tvai.assistant.next`
+          EOF
+          gh release edit v0.6.9 \
+            --title "Mohamed TV AI Assistant 0.7.0" \
+            --notes-file dist/release-notes.md
