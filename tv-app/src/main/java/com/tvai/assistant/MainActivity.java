@@ -405,7 +405,7 @@ public class MainActivity extends Activity {
         boolean asksTime = has(normalized, "الوقت", "الساعه كام", "كم الساعه", "time now", "current time", "what time");
         boolean asksWeather = has(normalized, "الطقس", "الجو", "درجه الحراره", "حاله الطقس", "weather", "temperature", "forecast");
         boolean asksGold = has(normalized, "الذهب", "سعر الذهب", "gold price", "gold rate");
-        boolean asksCurrency = has(normalized, "سعر الدولار", "الدولار اليوم", "سعر العمله", "سعر العملات", "exchange rate", "currency rate", "usd egp", "dollar today");
+        boolean asksCurrency = has(normalized, "سعر الدولار", "الدولار اليوم", "الدولار النهارده", "الدولار بكام", "بكام الدولار", "الدولار عامل كام", "الدولار بالمصري", "الدولار بالجنيه", "الدولار مقابل الجنيه", "سعر صرف الدولار", "سعر العمله", "سعر العملات", "سعر الصرف", "exchange rate", "currency rate", "usd egp", "dollar today", "how much is the dollar");
         boolean asksNews = has(normalized, "الاخبار", "اخبار", "اخر الاخبار", "news", "headlines");
         boolean asksSports = has(normalized, "مباريات", "مباراه", "مباراة", "جدول مباريات",
                 "مواعيد المباريات", "ماتشات", "ماتش", "الدوري المصري", "الدوري السعودي",
