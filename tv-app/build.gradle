@@ -39,7 +39,9 @@ android {
             signingConfig signingConfigs.release
         }
         debug {
-            // Debug builds are isolated from production device records and API secrets.
+            // Keep the DeepSeek staging test app separate from the production installation.
+            applicationIdSuffix '.staging'
+            versionNameSuffix '-staging'
             buildConfigField 'String', 'BACKEND_BASE_URL', '"https://mohamed-tv-ai-backend-staging.mhma26395.workers.dev"'
         }
     }

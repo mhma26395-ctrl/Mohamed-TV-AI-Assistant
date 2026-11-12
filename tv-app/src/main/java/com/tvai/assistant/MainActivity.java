@@ -63,6 +63,15 @@ import java.util.regex.Pattern;
 public class MainActivity extends Activity {
     protected TextView status, transcript, response;
     private SpeechRecognizer recognizer;
+    private boolean speechListening = false;
+    private final Handler speechHandler = new Handler(Looper.getMainLooper());
+    private final Runnable speechResultTimeout = () -> {
+        if (speechListening && !isFinishing() && !isDestroyed()) {
+            speechListening = false;
+            resetSpeechRecognizer();
+            setStatus("انتهت مهلة التعرف على الصوت. يمكنك الآن المحاولة مرة أخرى أو كتابة الأمر.");
+        }
+    };
     private TextToSpeech tts;
     private boolean ttsReady = false;
     protected String speechLanguage = "ar-EG";
@@ -193,6 +202,29 @@ public class MainActivity extends Activity {
         TextView foot = label("Version 0.6.4 · Voice replies are optional. Remote key mapping uses Accessibility key filtering when supported by the TV.");
         foot.setTextSize(13);
         root.addView(foot);
+
+        TextView supportTitle = label("☕ Buy Me a Coffee");
+        supportTitle.setTextSize(20);
+        supportTitle.setTypeface(null, Typeface.BOLD);
+        supportTitle.setGravity(Gravity.CENTER);
+        root.addView(supportTitle);
+        TextView supportMessage = label("Enjoying Mohamed TV AI Assistant? Support its development. Your support is completely optional.\nهل أعجبك التطبيق؟ يمكنك دعم تطويره بمساهمة اختيارية، شكرًا لك.");
+        supportMessage.setTextSize(15);
+        supportMessage.setGravity(Gravity.CENTER);
+        supportMessage.setTextColor(Color.LTGRAY);
+        root.addView(supportMessage);
+        Button supportButton = button("Support via PayPal / ادعم عبر PayPal");
+        supportButton.setContentDescription("Open the developer's PayPal support page");
+        supportButton.setOnClickListener(v -> {
+            try {
+                Intent payPalIntent = new Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://www.paypal.com/qrcodes/p2pqrc/VV4EEWFUZ8FCU"));
+                startActivity(payPalIntent);
+            } catch (ActivityNotFoundException ignored) {
+                setStatus("تعذر فتح رابط PayPal على هذا الجهاز.");
+            }
+        });
+        root.addView(supportButton);
         if (micButton != null) micButton.requestFocus();
     }
 
@@ -251,21 +283,74 @@ public class MainActivity extends Activity {
 
     protected void startListening() {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestMicPermission(); setStatus("Microphone permission required / نحتاج إذن الميكروفون"); return;
+            requestMicPermission();
+            setStatus("Microphone permission required / نحتاج إذن الميكروفون");
+            return;
         }
-        if (recognizer == null) { setStatus("Speech recognition is unavailable on this device."); return; }
+        if (speechListening) {
+            setStatus("الاستماع جارٍ بالفعل… انتظر حتى ينتهي.");
+            return;
+        }
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            setStatus("خدمة التعرف على الصوت غير متاحة على هذا الجهاز.");
+            return;
+        }
+        if (recognizer == null) {
+            try { recognizer = SpeechRecognizer.createSpeechRecognizer(this); }
+            catch (Exception e) {
+                setStatus("تعذر تشغيل خدمة التعرف على الصوت على هذا الجهاز.");
+                return;
+            }
+        }
+
+        speechListening = true;
         recognizer.setRecognitionListener(new RecognitionListener() {
-            public void onReadyForSpeech(Bundle p) { setStatus("Listening… / أستمع إليك…"); }
-            public void onBeginningOfSpeech() {}
+            public void onReadyForSpeech(Bundle p) { speechHandler.removeCallbacks(speechResultTimeout); setStatus("Listening… / أستمع إليك…"); }
+            public void onBeginningOfSpeech() { setStatus("تم التقاط صوتك… أكمل كلامك."); }
             public void onRmsChanged(float r) {}
             public void onBufferReceived(byte[] b) {}
-            public void onEndOfSpeech() { setStatus("Processing… / جاري المعالجة…"); }
-            public void onError(int e) { setStatus("Could not recognize speech. Try again / لم أتمكن من فهم الصوت، حاول مجددًا."); }
+            public void onEndOfSpeech() { setStatus("Processing… / جاري معالجة الصوت…"); speechHandler.removeCallbacks(speechResultTimeout); speechHandler.postDelayed(speechResultTimeout, 15000); }
+            public void onError(int error) {
+                speechHandler.removeCallbacks(speechResultTimeout);
+                speechListening = false;
+                String message;
+                switch (error) {
+                    case SpeechRecognizer.ERROR_NO_MATCH:
+                    case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:
+                        message = "لم تلتقط خدمة التعرف على الكلام كلمات كافية. انتظر ظهور «أستمع إليك» ثم تحدث بوضوح وبجملة كاملة.";
+                        break;
+                    case SpeechRecognizer.ERROR_NETWORK:
+                    case SpeechRecognizer.ERROR_NETWORK_TIMEOUT:
+                        message = "تعذر الاتصال بخدمة التعرف على الصوت. تحقق من الإنترنت ثم حاول مرة أخرى.";
+                        break;
+                    case SpeechRecognizer.ERROR_RECOGNIZER_BUSY:
+                        message = "خدمة التعرف على الصوت مشغولة. انتظر لحظة ثم حاول مرة واحدة.";
+                        break;
+                    case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
+                        message = "إذن الميكروفون غير متاح. راجع صلاحية الميكروفون للتطبيق.";
+                        break;
+                    case SpeechRecognizer.ERROR_AUDIO:
+                        message = "حدثت مشكلة في التقاط الصوت من الميكروفون. أغلق أي تطبيق يستخدم الميكروفون ثم حاول.";
+                        break;
+                    default:
+                        message = "تعطلت خدمة التعرف على الصوت (رمز " + error + "). حاول مرة أخرى بعد لحظة.";
+                        break;
+                }
+                setStatus(message);
+                if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) {
+                    resetSpeechRecognizer();
+                }
+            }
             public void onResults(Bundle b) {
+                speechHandler.removeCallbacks(speechResultTimeout);
+                speechListening = false;
                 ArrayList<String> list = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                if (list != null && !list.isEmpty()) {
-                    transcript.setText("You said / قلت: " + list.get(0));
-                    sendToAi(list.get(0));
+                if (list != null && !list.isEmpty() && list.get(0) != null && !list.get(0).trim().isEmpty()) {
+                    String recognized = list.get(0).trim();
+                    if (transcript != null) transcript.setText("You said / قلت: " + recognized);
+                    sendToAi(recognized);
+                } else {
+                    setStatus("لم تصل كلمات مفهومة من خدمة التعرف على الصوت. حاول مرة أخرى.");
                 }
             }
             public void onPartialResults(Bundle b) {}
@@ -276,7 +361,31 @@ public class MainActivity extends Activity {
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, speechLanguage);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, speechLanguage);
         i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak / تحدث الآن");
-        recognizer.startListening(i);
+        i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L);
+        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1800L);
+        i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+        try {
+            recognizer.startListening(i);
+        } catch (RuntimeException e) {
+            speechListening = false;
+            resetSpeechRecognizer();
+            setStatus("تعذر بدء الاستماع. انتظر لحظة ثم حاول مرة أخرى.");
+        }
+    }
+
+    private void resetSpeechRecognizer() {
+        try {
+            if (recognizer != null) {
+                recognizer.cancel();
+                recognizer.destroy();
+            }
+        } catch (Exception ignored) {}
+        recognizer = null;
+        if (!isFinishing() && !isDestroyed() && SpeechRecognizer.isRecognitionAvailable(this)) {
+            try { recognizer = SpeechRecognizer.createSpeechRecognizer(this); }
+            catch (Exception ignored) { recognizer = null; }
+        }
     }
 
     private String normalize(String raw) {
@@ -379,7 +488,8 @@ public class MainActivity extends Activity {
         String[][] cities = {
             {"القاهرة","القاهره","cairo"}, {"لندن","london"}, {"لوس انجلوس","los angeles"},
             {"نيويورك","new york"}, {"باريس","paris"}, {"الرياض","riyadh"}, {"دبي","dubai"},
-            {"مكه","مكة","mecca"}, {"طوكيو","tokyo"}, {"اسطنبول","istanbul"}
+            {"مكه","مكة","mecca"}, {"طوكيو","tokyo"}, {"اسطنبول","istanbul"},
+            {"واشنطن","واشنطون","واشنطن دي سي","وانشنطن","وانشنط","وانشنز","واشنط","washington","washington dc"}
         };
         for (String[] group : cities) for (String city : group) {
             if (normalized.contains(city)) {
@@ -393,6 +503,7 @@ public class MainActivity extends Activity {
                 if ("مكه".equals(city) || "مكة".equals(city)) return "Mecca";
                 if ("طوكيو".equals(city)) return "Tokyo";
                 if ("اسطنبول".equals(city)) return "Istanbul";
+                if (city.contains("واشن") || city.contains("وانشن") || city.startsWith("washington")) return "Washington";
                 return city;
             }
         }
@@ -405,13 +516,17 @@ public class MainActivity extends Activity {
         boolean asksTime = has(normalized, "الوقت", "الساعه كام", "كم الساعه", "time now", "current time", "what time");
         boolean asksWeather = has(normalized, "الطقس", "الجو", "درجه الحراره", "حاله الطقس", "weather", "temperature", "forecast");
         boolean asksGold = has(normalized, "الذهب", "سعر الذهب", "gold price", "gold rate");
-        boolean asksCurrency = has(normalized, "سعر الدولار", "الدولار اليوم", "سعر العمله", "سعر العملات", "exchange rate", "currency rate", "usd egp", "dollar today");
+        boolean asksCurrency = has(normalized, "سعر الدولار", "الدولار اليوم", "الدولار النهارده", "الدولار بكام", "بكام الدولار", "الدولار عامل كام", "الدولار بالمصري", "الدولار بالجنيه", "الدولار مقابل الجنيه", "سعر صرف الدولار", "سعر العمله", "سعر العملات", "سعر الصرف", "exchange rate", "currency rate", "usd egp", "dollar today", "how much is the dollar");
         boolean asksNews = has(normalized, "الاخبار", "اخبار", "اخر الاخبار", "news", "headlines");
+        boolean asksStandings = has(normalized, "ترتيب الدوري", "جدول الدوري", "ترتيب الفرق", "جدول الترتيب", "league table", "standings");
+        boolean asksAssists = has(normalized, "صناع الاهداف", "صناع الأهداف", "ترتيب الصناع", "assists", "assist leaders");
+        boolean asksScorers = has(normalized, "الهدافين", "هداف الدوري", "ترتيب الهدافين", "هدافين الدوري", "top scorers", "topscorers", "goal scorers");
         boolean asksSports = has(normalized, "مباريات", "مباراه", "مباراة", "جدول مباريات",
                 "مواعيد المباريات", "ماتشات", "ماتش", "الدوري المصري", "الدوري السعودي",
                 "الدوري الانجليزي", "الدوري الإنجليزي", "الدوري الاسباني", "الدوري الإسباني",
                 "premier league", "la liga", "saudi pro league", "fixtures", "football matches");
-        if (!asksTime && !asksWeather && !asksGold && !asksCurrency && !asksNews && !asksSports) return false;
+        boolean asksSportsStats = asksStandings || asksAssists || asksScorers;
+        if (!asksTime && !asksWeather && !asksGold && !asksCurrency && !asksNews && !asksSports && !asksSportsStats) return false;
 
         String city = detectInfoCity(normalized);
         if (asksNews && city.isEmpty()) {
@@ -427,7 +542,7 @@ public class MainActivity extends Activity {
         }
 
         String selectedLeague = "";
-        if (asksSports) {
+        if (asksSports || asksSportsStats) {
             if (has(normalized, "المصري", "egyptian")) selectedLeague = "egyptian-premier-league";
             else if (has(normalized, "السعودي", "saudi")) selectedLeague = "saudi-pro-league";
             else if (has(normalized, "الاسباني", "الإسباني", "la liga", "laliga")) selectedLeague = "spanish-la-liga";
@@ -437,7 +552,7 @@ public class MainActivity extends Activity {
                 return true;
             }
         }
-        final String type = asksSports ? "sports" : asksWeather ? "weather" : asksTime ? "time" : asksGold ? "gold" : asksCurrency ? "currency" : "news";
+        final String type = asksStandings ? "standings" : asksAssists ? "assists" : asksScorers ? "scorers" : asksSports ? "sports" : asksWeather ? "weather" : asksTime ? "time" : asksGold ? "gold" : asksCurrency ? "currency" : "news";
         final String queryLocation = city;
         final String sportsLeague = selectedLeague;
         setStatus("جاري جلب المعلومات من مصدر مباشر…");
@@ -455,8 +570,8 @@ public class MainActivity extends Activity {
                 JSONObject payload = new JSONObject();
                 payload.put("type", type);
                 payload.put("locale", speechLanguage);
+                if ("sports".equals(type) || "standings".equals(type) || "scorers".equals(type) || "assists".equals(type)) payload.put("league", sportsLeague);
                 if ("sports".equals(type)) {
-                    payload.put("league", sportsLeague);
                     java.text.SimpleDateFormat dayFormat = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US);
                     payload.put("date", dayFormat.format(new java.util.Date()));
                 }
@@ -489,6 +604,36 @@ public class MainActivity extends Activity {
                 } else if ("time".equals(type)) {
                     answer = "الوقت الآن في " + queryLocation + ": " + result.optString("localDateTime") +
                             "\nالمنطقة الزمنية: " + result.optString("timezone");
+                } else if ("standings".equals(type) || "scorers".equals(type) || "assists".equals(type)) {
+                    JSONArray rows = result.optJSONArray("rows");
+                    StringBuilder statsText = new StringBuilder("standings".equals(type) ? "ترتيب " : "assists".equals(type) ? "أكثر صناع الأهداف في " : "هدافو ");
+                    statsText.append(result.optString("league")).append(":");
+                    if (rows == null || rows.length() == 0) statsText.append("\\nلا توجد بيانات متاحة حاليًا من المصدر.");
+                    else for (int i = 0; i < rows.length() && i < 20; i++) {
+                        JSONObject row = rows.optJSONObject(i);
+                        if (row == null) continue;
+                        String name = row.optString("team", row.optString("player", row.optString("name", "غير معروف")));
+                        statsText.append("\\n").append(row.optInt("position", i + 1)).append(". ").append(name);
+                        if ("standings".equals(type)) {
+                            String played = row.optString("played", "");
+                            String won = row.optString("won", "");
+                            String drawn = row.optString("drawn", "");
+                            String lost = row.optString("lost", "");
+                            String points = row.optString("points", "");
+                            if (!played.isEmpty()) statsText.append(" | لعب: ").append(played);
+                            if (!won.isEmpty()) statsText.append(" | فاز: ").append(won);
+                            if (!drawn.isEmpty()) statsText.append(" | تعادل: ").append(drawn);
+                            if (!lost.isEmpty()) statsText.append(" | خسر: ").append(lost);
+                            if (!points.isEmpty()) statsText.append(" | النقاط: ").append(points);
+                        } else {
+                            String goals = row.optString("goals", "");
+                            String assistsCount = row.optString("assists", "");
+                            if (!goals.isEmpty()) statsText.append(" | الأهداف: ").append(goals);
+                            if (!assistsCount.isEmpty()) statsText.append(" | الصناعة: ").append(assistsCount);
+                        }
+                    }
+                    statsText.append("\\nالمصدر: SportScore");
+                    answer = statsText.toString();
                 } else if ("sports".equals(type)) {
                     JSONArray matches = result.optJSONArray("matches");
                     if (matches == null || matches.length() == 0) {
@@ -1434,13 +1579,13 @@ public class MainActivity extends Activity {
 
     private boolean tryHandleYouTubeSearch(String raw, String normalized) {
         boolean mentionsYouTube = has(normalized, "يوتيوب", "youtube");
-        boolean contentRequest = has(normalized, "اغنيه", "اغاني", "قناه", "فيديو", "ابحث", "دور على", "شغل", "اعرض", "search");
+        boolean contentRequest = has(normalized, "اغنيه", "اغاني", "قناه", "فيديو", "فيلم", "افلام", "فلم", "افلام كامله", "فيلم كامل", "رشح", "رشحلي", "اقترح", "ابحث", "دور على", "شغل", "اعرض", "search", "recommend", "movie", "film");
         if (!mentionsYouTube || !contentRequest) return false;
 
         String query = normalized;
         String[] remove = {"من اليوتيوب", "على اليوتيوب", "في اليوتيوب", "باليوتيوب", "على youtube", "in youtube", "on youtube",
                 "ابحث لي عن", "ابحث عن", "ابحث", "دور على", "دورلي على", "شغل لي", "شغل", "افتح", "اعرض لي", "اعرض",
-                "اغنيه", "اغاني", "قناه", "فيديو", "youtube", "يوتيوب", "من فضلك", "لو سمحت"};
+                "اغنيه", "اغاني", "قناه", "فيديو", "فيلم", "افلام", "فلم", "افلام كامله", "فيلم كامل", "رشحلي", "رشح", "اقترح", "recommend", "movie", "film", "youtube", "يوتيوب", "من فضلك", "لو سمحت"};
         for (String part : remove) query = query.replace(part, " ");
         query = query.replaceAll("\\s+", " ").trim();
         if (query.isEmpty()) {
@@ -1603,8 +1748,14 @@ public class MainActivity extends Activity {
             Shizuku.removeRequestPermissionResultListener(shizukuPermissionResult);
         } catch (Exception ignored) {}
         network.shutdownNow();
-        if (recognizer != null) { recognizer.destroy(); recognizer = null; }
-        if (tts != null) { tts.stop(); tts.shutdown(); }
+        speechHandler.removeCallbacks(speechResultTimeout);
+        speechListening = false;
+        if (recognizer != null) {
+            try { recognizer.cancel(); recognizer.destroy(); } catch (Exception ignored) {}
+            recognizer = null;
+        }
+        if (tts != null) { try { tts.stop(); tts.shutdown(); } catch (Exception ignored) {} tts = null; }
+        ttsReady = false;
         super.onDestroy();
     }
 }
