@@ -623,14 +623,27 @@ public class MainActivity extends Activity {
                     answer = report.toString();
                 }
                 final String finalAnswer = answer;
-                runOnUiThread(() -> reply(finalAnswer));
+                runOnUiThread(() -> {
+                    reply(finalAnswer);
+                    aiRequestInProgress = false;
+                });
             } catch (Exception e) {
-                if (e.getMessage() != null && e.getMessage().startsWith("device_pending_approval:")) {
-                    String deviceId = e.getMessage().substring("device_pending_approval:".length());
-                    runOnUiThread(() -> reply("تم تسجيل هذا التلفزيون، لكنه ينتظر موافقة المسؤول قبل عرض المعلومات المباشرة. رقم الجهاز: " + deviceId));
+                final String failureMessage;
+                String detail = e.getMessage() == null ? "" : e.getMessage();
+                if (detail.startsWith("device_pending_approval:")) {
+                    String deviceId = detail.substring("device_pending_approval:".length());
+                    failureMessage = "تم تسجيل هذا التلفزيون، لكنه ينتظر موافقة المسؤول قبل عرض المعلومات المباشرة. رقم الجهاز: " + deviceId;
+                } else if (e instanceof java.net.SocketTimeoutException) {
+                    failureMessage = "استغرق مصدر المعلومات وقتًا أطول من المعتاد. لم نرسل طلبًا بديلًا إلى Groq؛ حاول بعد قليل.";
+                } else if (e instanceof java.net.UnknownHostException) {
+                    failureMessage = "تعذر الوصول إلى الإنترنت أو اسم الخادم. افحص اتصال التلفزيون بالشبكة.";
                 } else {
-                    runOnUiThread(() -> reply("تعذر الاتصال بمصدر المعلومات المباشرة. تحقق من الإنترنت وحاول مرة أخرى."));
+                    failureMessage = "تعذر الاتصال بمصدر المعلومات المباشرة. حاول مرة أخرى، أو استخدم الكتابة بدل الصوت.";
                 }
+                runOnUiThread(() -> {
+                    reply(failureMessage);
+                    aiRequestInProgress = false;
+                });
             } finally { if (connection != null) connection.disconnect(); }
         });
         return true;
@@ -939,7 +952,7 @@ public class MainActivity extends Activity {
         if (tryHandleSleepTimerRequest(message, normalizedRequest)) { aiRequestInProgress = false; return; }
         if (tryHandleLocalAudioCommand(normalizedRequest)) { aiRequestInProgress = false; return; }
         if (tryHandleLocalStorageQuestion(normalizedRequest)) { aiRequestInProgress = false; return; }
-        if (tryHandleLiveInfo(message, normalizedRequest)) { aiRequestInProgress = false; return; }
+        if (tryHandleLiveInfo(message, normalizedRequest)) { return; }
         String cachedAnswer = cachedAiAnswer(normalizedRequest);
         if (cachedAnswer != null) {
             reply(cachedAnswer + "\n\n(إجابة محفوظة مؤقتًا لتقليل استهلاك الطلبات)");
