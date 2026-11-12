@@ -312,7 +312,7 @@ const SPORTS_LEAGUES = {
 async function getSportsInfo(leagueKey, dateValue, locale) {
   const league = SPORTS_LEAGUES[leagueKey];
   if (!league) return { ok: false, error: "unsupported_league" };
-  const date = /^\\d{8}$/.test(String(dateValue || "")) ? String(dateValue) :
+  const date = /^\d{8}$/.test(String(dateValue || "")) ? String(dateValue) :
     new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit" })
       .format(new Date()).replace(/-/g, "");
   const url = "https://site.api.espn.com/apis/site/v2/sports/soccer/" +
