@@ -47,8 +47,11 @@ public class CompactAssistantActivity extends MainActivity {
         // Keep the compact window, but make the complete answer reachable with the TV remote.
         ScrollView answerScroll = new ScrollView(this);
         answerScroll.setFillViewport(true);
-        answerScroll.setFocusable(true);
-        answerScroll.setFocusableInTouchMode(true);
+        // Keep the answer area out of the TV remote focus chain.
+        // DPAD up/down must move between actionable controls; the dedicated
+        // answer buttons below handle scrolling without trapping focus here.
+        answerScroll.setFocusable(false);
+        answerScroll.setFocusableInTouchMode(false);
         answerScroll.setVerticalScrollBarEnabled(true);
         answerScroll.setSmoothScrollingEnabled(true);
         int answerHeight = (int)(getResources().getDisplayMetrics().density * 230);
@@ -66,18 +69,8 @@ public class CompactAssistantActivity extends MainActivity {
         response.setPadding(8, 8, 8, 12);
         answerScroll.addView(response, new ScrollView.LayoutParams(
                 ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
-        answerScroll.setOnKeyListener((v, keyCode, event) -> {
-            if (event.getAction() != android.view.KeyEvent.ACTION_DOWN) return true;
-            if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
-                answerScroll.smoothScrollBy(0, (int)(150 * getResources().getDisplayMetrics().density));
-                return true;
-            }
-            if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
-                answerScroll.smoothScrollBy(0, -(int)(150 * getResources().getDisplayMetrics().density));
-                return true;
-            }
-            return false;
-        });
+        // Do not consume DPAD events here: Android TV should navigate
+        // naturally between the answer controls, microphone, and close button.
         panel.addView(answerScroll);
 
         LinearLayout answerControls = new LinearLayout(this);
@@ -135,6 +128,17 @@ public class CompactAssistantActivity extends MainActivity {
         p.y = 90;
         getWindow().setAttributes(p);
         getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+    }
+
+    @Override public boolean dispatchKeyEvent(android.view.KeyEvent event) {
+        if (event.getKeyCode() == android.view.KeyEvent.KEYCODE_BACK) {
+            if (event.getAction() == android.view.KeyEvent.ACTION_DOWN
+                    && event.getRepeatCount() == 0) {
+                finish();
+            }
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     @Override public void onBackPressed() {

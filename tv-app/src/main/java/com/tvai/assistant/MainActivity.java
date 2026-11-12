@@ -70,6 +70,8 @@ public class MainActivity extends Activity {
     private Button ttsToggleButton;
     private EditText messageInput;
     private final ExecutorService network = Executors.newSingleThreadExecutor();
+    // Prevent duplicate AI requests from piling up when the user presses Send or the mic repeatedly.
+    private volatile boolean aiRequestInProgress = false;
     private static final String API_URL = BuildConfig.BACKEND_BASE_URL + "/v1/assistant";
     private static final String INFO_API_URL = BuildConfig.BACKEND_BASE_URL + "/v1/info";
     private static final int SHIZUKU_PERMISSION_REQUEST = 7301;
@@ -260,13 +262,31 @@ public class MainActivity extends Activity {
             public void onRmsChanged(float r) {}
             public void onBufferReceived(byte[] b) {}
             public void onEndOfSpeech() { setStatus("Processing… / جاري المعالجة…"); }
-            public void onError(int e) { setStatus("Could not recognize speech. Try again / لم أتمكن من فهم الصوت، حاول مجددًا."); }
+            public void onError(int e) {
+                String message;
+                switch (e) {
+                    case SpeechRecognizer.ERROR_AUDIO: message = "مشكلة في تسجيل الصوت. افحص الميكروفون ثم حاول مجددًا."; break;
+                    case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS: message = "إذن الميكروفون غير متاح. فعّل إذن التسجيل للتطبيق."; break;
+                    case SpeechRecognizer.ERROR_NETWORK:
+                    case SpeechRecognizer.ERROR_NETWORK_TIMEOUT: message = "خدمة التعرف على الصوت لم تصل إلى الشبكة. تحقق من الإنترنت أو استخدم الكتابة."; break;
+                    case SpeechRecognizer.ERROR_NO_MATCH:
+                    case SpeechRecognizer.ERROR_SPEECH_TIMEOUT: message = "لم أسمع أمرًا واضحًا. قرّب الريموت وتحدث بعد نغمة الاستماع."; break;
+                    case SpeechRecognizer.ERROR_RECOGNIZER_BUSY: message = "الميكروفون مشغول بطلب سابق. انتظر لحظة ثم حاول."; break;
+                    default: message = "تعذر التعرف على الصوت (رمز " + e + "). يمكنك كتابة الأمر أو المحاولة مرة أخرى."; break;
+                }
+                setStatus(message);
+                if (micButton != null) micButton.setEnabled(true);
+            }
             public void onResults(Bundle b) {
                 ArrayList<String> list = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                if (list != null && !list.isEmpty()) {
-                    transcript.setText("You said / قلت: " + list.get(0));
-                    sendToAi(list.get(0));
+                String best = chooseSpeechCandidate(list);
+                if (best != null && !best.trim().isEmpty()) {
+                    transcript.setText("You said / قلت: " + best);
+                    sendToAi(best);
+                } else {
+                    setStatus("لم يصل نص واضح من خدمة التعرف على الصوت. حاول مجددًا أو اكتب الأمر.");
                 }
+                if (micButton != null) micButton.setEnabled(true);
             }
             public void onPartialResults(Bundle b) {}
             public void onEvent(int e, Bundle p) {}
@@ -275,8 +295,43 @@ public class MainActivity extends Activity {
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, speechLanguage);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, speechLanguage);
-        i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak / تحدث الآن");
-        recognizer.startListening(i);
+        i.putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false);
+        i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
+        i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        i.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
+        i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak clearly / تحدث بوضوح");
+        if (micButton != null) micButton.setEnabled(false);
+        try {
+            recognizer.cancel();
+            recognizer.startListening(i);
+        } catch (Exception e) {
+            if (micButton != null) micButton.setEnabled(true);
+            setStatus("تعذر بدء الميكروفون. أغلق أي تطبيق يستخدمه ثم حاول مجددًا.");
+        }
+    }
+
+    private String chooseSpeechCandidate(ArrayList<String> candidates) {
+        if (candidates == null || candidates.isEmpty()) return null;
+        String best = candidates.get(0);
+        int bestScore = speechIntentScore(normalize(best));
+        for (int i = 1; i < candidates.size(); i++) {
+            String candidate = candidates.get(i);
+            int score = speechIntentScore(normalize(candidate));
+            if (score > bestScore) { best = candidate; bestScore = score; }
+        }
+        return best;
+    }
+
+    private int speechIntentScore(String text) {
+        int score = 0;
+        if (has(text, "يوتيوب", "youtube")) score += 5;
+        if (has(text, "افتح", "فتح", "شغل", "شغللي", "launch", "open")) score += 2;
+        if (has(text, "اعدادات", "الاعدادات", "الضبط", "settings")) score += 5;
+        if (has(text, "الطقس", "طقس", "الجو", "درجه الحراره", "weather")) score += 5;
+        if (has(text, "الدولار", "سعر الصرف", "currency", "usd")) score += 5;
+        if (has(text, "الذهب", "الدهب", "gold")) score += 5;
+        if (has(text, "مساحه التخزين", "التخزين الداخلي", "storage")) score += 5;
+        return score;
     }
 
     private String normalize(String raw) {
@@ -373,13 +428,18 @@ public class MainActivity extends Activity {
 
     private String detectInfoCity(String normalized) {
         String[][] cities = {
-            {"القاهرة","القاهره","cairo"}, {"لندن","london"}, {"لوس انجلوس","los angeles"},
-            {"نيويورك","new york"}, {"باريس","paris"}, {"الرياض","riyadh"}, {"دبي","dubai"},
-            {"مكه","مكة","mecca"}, {"طوكيو","tokyo"}, {"اسطنبول","istanbul"}
+            {"القاهرة","القاهره","cairo"}, {"الإسكندرية","الاسكندرية","اسكندريه","alexandria"},
+            {"الجيزة","الجيزه","giza"}, {"المنيا","minya"}, {"لندن","london"},
+            {"لوس انجلوس","los angeles"}, {"نيويورك","new york"}, {"باريس","paris"},
+            {"الرياض","riyadh"}, {"دبي","dubai"}, {"مكه","مكة","mecca"},
+            {"طوكيو","tokyo"}, {"اسطنبول","istanbul"}
         };
         for (String[] group : cities) for (String city : group) {
             if (normalized.contains(city)) {
                 if ("القاهره".equals(city)) return "Cairo";
+                if ("الإسكندرية".equals(city) || "الاسكندرية".equals(city) || "اسكندريه".equals(city)) return "Alexandria";
+                if ("الجيزة".equals(city) || "الجيزه".equals(city)) return "Giza";
+                if ("المنيا".equals(city)) return "Minya";
                 if ("لندن".equals(city)) return "London";
                 if ("لوس انجلوس".equals(city)) return "Los Angeles";
                 if ("نيويورك".equals(city)) return "New York";
@@ -399,9 +459,19 @@ public class MainActivity extends Activity {
 
     private boolean tryHandleLiveInfo(String raw, String normalized) {
         boolean asksTime = has(normalized, "الوقت", "الساعه كام", "كم الساعه", "time now", "current time", "what time");
-        boolean asksWeather = has(normalized, "الطقس", "الجو", "درجه الحراره", "حاله الطقس", "weather", "temperature", "forecast");
-        boolean asksGold = has(normalized, "الذهب", "سعر الذهب", "gold price", "gold rate");
-        boolean asksCurrency = has(normalized, "سعر الدولار", "الدولار اليوم", "سعر العمله", "سعر العملات", "exchange rate", "currency rate", "usd egp", "dollar today");
+        // Accept common Egyptian Arabic voice-recognition variants so live data
+        // requests are routed to /v1/info instead of consuming a Groq completion.
+        boolean asksWeather = has(normalized, "الطقس", "طقس", "الجو", "حاله الجو",
+                "حاله الطقس", "حاله الطقس اليوم", "درجه الحراره", "درجه الحرارة",
+                "الحراره", "الحرارة", "الجو عامل", "الجو في", "الجو النهارده",
+                "الجو اليوم", "weather", "temperature", "forecast");
+        boolean asksGold = has(normalized, "الذهب", "ذهب", "الدهب", "دهب",
+                "سعر جرام الذهب", "جرام الذهب", "جرام الدهب", "عيار 21", "عيار 24",
+                "عيار 18", "gold price", "gold rate");
+        boolean asksCurrency = has(normalized, "الدولار", "دولار", "سعر العمله", "سعر العملات",
+                "العمله بكام", "الدولار بكام", "الدولار عامل كام", "بكام الدولار",
+                "الدولار النهارده", "سعر العمله اليوم", "سعر الصرف",
+                "exchange rate", "currency rate", "usd egp", "dollar today");
         boolean asksNews = has(normalized, "الاخبار", "اخبار", "اخر الاخبار", "news", "headlines");
         boolean asksSports = has(normalized, "مباريات", "مباراه", "مباراة", "جدول مباريات",
                 "مواعيد المباريات", "ماتشات", "ماتش", "الدوري المصري", "الدوري السعودي",
@@ -553,14 +623,27 @@ public class MainActivity extends Activity {
                     answer = report.toString();
                 }
                 final String finalAnswer = answer;
-                runOnUiThread(() -> reply(finalAnswer));
+                runOnUiThread(() -> {
+                    reply(finalAnswer);
+                    aiRequestInProgress = false;
+                });
             } catch (Exception e) {
-                if (e.getMessage() != null && e.getMessage().startsWith("device_pending_approval:")) {
-                    String deviceId = e.getMessage().substring("device_pending_approval:".length());
-                    runOnUiThread(() -> reply("تم تسجيل هذا التلفزيون، لكنه ينتظر موافقة المسؤول قبل عرض المعلومات المباشرة. رقم الجهاز: " + deviceId));
+                final String failureMessage;
+                String detail = e.getMessage() == null ? "" : e.getMessage();
+                if (detail.startsWith("device_pending_approval:")) {
+                    String deviceId = detail.substring("device_pending_approval:".length());
+                    failureMessage = "تم تسجيل هذا التلفزيون، لكنه ينتظر موافقة المسؤول قبل عرض المعلومات المباشرة. رقم الجهاز: " + deviceId;
+                } else if (e instanceof java.net.SocketTimeoutException) {
+                    failureMessage = "استغرق مصدر المعلومات وقتًا أطول من المعتاد. لم نرسل طلبًا بديلًا إلى Groq؛ حاول بعد قليل.";
+                } else if (e instanceof java.net.UnknownHostException) {
+                    failureMessage = "تعذر الوصول إلى الإنترنت أو اسم الخادم. افحص اتصال التلفزيون بالشبكة.";
                 } else {
-                    runOnUiThread(() -> reply("تعذر الاتصال بمصدر المعلومات المباشرة. تحقق من الإنترنت وحاول مرة أخرى."));
+                    failureMessage = "تعذر الاتصال بمصدر المعلومات المباشرة. حاول مرة أخرى، أو استخدم الكتابة بدل الصوت.";
                 }
+                runOnUiThread(() -> {
+                    reply(failureMessage);
+                    aiRequestInProgress = false;
+                });
             } finally { if (connection != null) connection.disconnect(); }
         });
         return true;
@@ -710,19 +793,184 @@ public class MainActivity extends Activity {
                 + "Continue with the missing remaining information. Avoid repeating what was already answered unless needed for continuity.";
     }
 
+    // Handle explicit, unambiguous launch/settings commands locally before contacting the AI provider.
+    // This keeps basic TV controls available even when the provider quota is exhausted.
+    private boolean tryHandleLocalOpenCommand(String raw, String normalized) {
+        boolean hasOpenVerb = has(normalized, "افتح", "فتح", "شغل", "شغللي", "شغل لي",
+                "launch", "open", "start", "run", "go to");
+        boolean clearTarget = has(normalized, "يوتيوب", "youtube", "داونلودر", "داون لودر",
+                "دانلودر", "downloader", "جوجل بلاي", "google play", "play store");
+        if (!hasOpenVerb && !clearTarget) return false;
+
+        if (has(normalized, "اعدادات vpn", "اعدادات ال vpn", "vpn settings", "افتح vpn", "شغل vpn")) {
+            openVpnSettingsOrApp();
+            return true;
+        }
+        if (has(normalized, "اعدادات الواي فاي", "اعدادات الشبكه", "اعدادات الشبكة",
+                "wifi settings", "wi-fi settings", "network settings", "internet settings")) {
+            launchIntentWithFallback(new Intent(Settings.ACTION_WIFI_SETTINGS),
+                    new Intent(Settings.ACTION_SETTINGS), "Network settings",
+                    "فتحت إعدادات الشبكة. / Network settings opened.");
+            return true;
+        }
+        if (has(normalized, "خيارات المطور", "اعدادات المطور", "developer options")) {
+            launchIntentWithFallback(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS),
+                    new Intent(Settings.ACTION_SETTINGS), "Developer options",
+                    "فتحت خيارات المطورين إن كانت متاحة. / Developer options opened if available.");
+            return true;
+        }
+        if (has(normalized, "اعدادات اللغه", "اعدادات اللغة", "تغيير اللغه", "تغيير اللغة",
+                "language settings")) {
+            launchIntentWithFallback(new Intent(Settings.ACTION_LOCALE_SETTINGS),
+                    new Intent(Settings.ACTION_SETTINGS), "Language settings",
+                    "فتحت إعدادات اللغة إن كانت متاحة. / Language settings opened if available.");
+            return true;
+        }
+        if (has(normalized, "اعدادات الشاشه", "اعدادات الشاشة", "اعدادات العرض",
+                "display settings", "screen settings")) {
+            launchIntentWithFallback(new Intent(Settings.ACTION_DISPLAY_SETTINGS),
+                    new Intent(Settings.ACTION_SETTINGS), "Display settings",
+                    "فتحت إعدادات الشاشة إن كانت متاحة. / Display settings opened if available.");
+            return true;
+        }
+        if (has(normalized, "اعدادات", "الاعدادات", "الإعدادات", "الضبط", "settings")) {
+            launchIntent(new Intent(Settings.ACTION_SETTINGS), "Settings");
+            return true;
+        }
+
+        if (has(normalized, "يوتيوب", "youtube")) {
+            // Preserve the existing dedicated YouTube search flow for content queries.
+            if (has(normalized, "ابحث", "دور على", "فيديو", "اغنيه", "اغاني", "قناه", "search")) return false;
+            launchYouTube();
+            return true;
+        }
+
+        String target = normalized;
+        String[] remove = {"من فضلك", "لو سمحت", "من فضلك", "تطبيق", "برنامج",
+                "افتح", "فتح", "شغل لي", "شغللي", "شغل", "launch", "open", "start", "run", "go to"};
+        for (String word : remove) target = target.replace(word, " ");
+        target = target.replaceAll("\\s+", " ").trim();
+        if (target.isEmpty()) return false;
+
+        if (has(target, "داونلودر", "داون لودر", "دانلودر", "داندودا", "downloader")) {
+            launchPackage("com.esaba.downloader", "Downloader");
+            return true;
+        }
+        if (has(target, "جوجل بلاي", "google play", "play store")) {
+            launchPackage("com.android.vending", "Google Play");
+            return true;
+        }
+
+        JSONArray apps = getInstalledLaunchableAppsJson();
+        String matchedPackage = null;
+        String matchedName = null;
+        for (int i = 0; i < apps.length(); i++) {
+            JSONObject app = apps.optJSONObject(i);
+            if (app == null) continue;
+            String appName = normalize(app.optString("name", ""));
+            String packageName = app.optString("packageName", "");
+            if (appName.length() < 3 || packageName.isEmpty()) continue;
+            if (target.equals(appName) || (" " + target + " ").contains(" " + appName + " ")) {
+                if (matchedPackage != null && !matchedPackage.equals(packageName)) {
+                    reply("وجدت أكثر من تطبيق يطابق الاسم. اكتب الاسم الكامل للتطبيق كما يظهر في قائمة التطبيقات.");
+                    return true;
+                }
+                matchedPackage = packageName;
+                matchedName = app.optString("name", packageName);
+            }
+        }
+        if (matchedPackage != null) {
+            launchPackage(matchedPackage, matchedName);
+            return true;
+        }
+        return false;
+    }
+
+    private long getGroqCooldownRemainingMs() {
+        long until = getSharedPreferences("assistant_settings", MODE_PRIVATE).getLong("groq_cooldown_until", 0L);
+        return Math.max(0L, until - System.currentTimeMillis());
+    }
+
+    private long parseGroqWaitMs(String retryAfter, String providerMessage) {
+        long seconds = 30L;
+        try {
+            if (retryAfter != null && retryAfter.trim().matches("\\d{1,8}")) seconds = Long.parseLong(retryAfter.trim());
+            else if (providerMessage != null) {
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)(\\d+(?:\\.\\d+)?)\\s*(seconds?|secs?|s|minutes?|mins?|hours?|hrs?|h)").matcher(providerMessage);
+                if (m.find()) {
+                    double amount = Double.parseDouble(m.group(1));
+                    String unit = m.group(2).toLowerCase(Locale.ROOT);
+                    seconds = (long) Math.ceil(amount * (unit.startsWith("h") ? 3600d : unit.startsWith("m") ? 60d : 1d));
+                }
+            }
+        } catch (Exception ignored) { seconds = 30L; }
+        return Math.max(10L, Math.min(seconds, 86400L)) * 1000L;
+    }
+
+    private boolean isCacheableAiQuestion(String normalized) {
+        return !has(normalized, "اليوم", "النهارده", "دلوقتي", "حاليا", "الان", "الآن",
+                "سعر", "الطقس", "الجو", "الاخبار", "مباريات", "الوقت", "الساعه",
+                "today", "now", "current", "weather", "price", "news", "match", "score");
+    }
+
+    private String cachedAiAnswer(String normalized) {
+        if (!isCacheableAiQuestion(normalized)) return null;
+        String key = "answer_" + Integer.toHexString(normalized.hashCode());
+        android.content.SharedPreferences cache = getSharedPreferences("assistant_answer_cache", MODE_PRIVATE);
+        long savedAt = cache.getLong(key + "_time", 0L);
+        if (savedAt <= 0L || System.currentTimeMillis() - savedAt > 10L * 60L * 1000L) return null;
+        String answer = cache.getString(key, null);
+        return answer == null || answer.trim().isEmpty() ? null : answer;
+    }
+
+    private void saveCachedAiAnswer(String normalized, String answer) {
+        if (!isCacheableAiQuestion(normalized) || answer == null || answer.trim().isEmpty()
+                || answer.length() > 5000) return;
+        String key = "answer_" + Integer.toHexString(normalized.hashCode());
+        getSharedPreferences("assistant_answer_cache", MODE_PRIVATE).edit()
+                .putString(key, answer).putLong(key + "_time", System.currentTimeMillis()).apply();
+    }
+
+    private boolean tryHandleLocalStorageQuestion(String normalized) {
+        if (!has(normalized, "مساحه التخزين", "مساحة التخزين", "التخزين الداخلي",
+                "المساحه الداخليه", "المساحة الداخلية", "internal storage", "storage space",
+                "how much storage", "available storage")) return false;
+        reply(getStorageReport());
+        return true;
+    }
+
     protected void sendToAi(String message) {
+        if (aiRequestInProgress) {
+            reply("هناك طلب جارٍ بالفعل. انتظر الرد الحالي قبل إرسال سؤال آخر / Please wait for the current answer before sending another request.");
+            return;
+        }
+        aiRequestInProgress = true;
         String normalizedRequest = normalize(message);
         final String originalMessage = message;
         final String contextualMessage = buildConversationContext(message);
-        if (tryHandleSleepTimerRequest(message, normalizedRequest)) return;
-        if (tryHandleLocalAudioCommand(normalizedRequest)) return;
-        if (tryHandleLiveInfo(message, normalizedRequest)) return;
-        if (tryHandleYouTubeSearch(message, normalizedRequest)) return;
+        if (tryHandleLocalOpenCommand(message, normalizedRequest)) { aiRequestInProgress = false; return; }
+        if (tryHandleSleepTimerRequest(message, normalizedRequest)) { aiRequestInProgress = false; return; }
+        if (tryHandleLocalAudioCommand(normalizedRequest)) { aiRequestInProgress = false; return; }
+        if (tryHandleLocalStorageQuestion(normalizedRequest)) { aiRequestInProgress = false; return; }
+        if (tryHandleLiveInfo(message, normalizedRequest)) { return; }
+        String cachedAnswer = cachedAiAnswer(normalizedRequest);
+        if (cachedAnswer != null) {
+            reply(cachedAnswer + "\n\n(إجابة محفوظة مؤقتًا لتقليل استهلاك الطلبات)");
+            aiRequestInProgress = false;
+            return;
+        }
+        if (tryHandleYouTubeSearch(message, normalizedRequest)) { aiRequestInProgress = false; return; }
         if (has(normalizedRequest,
                 "التطبيقات اللي شغاله في الخلفيه", "التطبيقات الشغاله في الخلفيه",
                 "تطبيقات الخلفيه", "ايه التطبيقات المفتوحه", "التطبيقات المفتوحه",
                 "background apps", "apps running in background", "which apps are running")) {
             reply(getRecentAppsReport());
+            aiRequestInProgress = false;
+            return;
+        }
+        long cooldownRemaining = getGroqCooldownRemainingMs();
+        if (cooldownRemaining > 0L) {
+            reply("تم إيقاف طلبات Groq مؤقتًا لتجنب تكرار الرفض. حاول بعد " + ((cooldownRemaining + 999L) / 1000L) + " ثانية. الأوامر المحلية والمعلومات المباشرة تظل متاحة.");
             return;
         }
         setStatus("Preparing request… / تجهيز الطلب…");
@@ -740,17 +988,27 @@ public class MainActivity extends Activity {
                 String sessionToken = DeviceAuth.getSessionToken(this);
                 connection.setRequestProperty("Authorization", "Bearer " + sessionToken);
                 JSONObject payload = new JSONObject();
-                JSONArray installedApps = getInstalledLaunchableAppsJson();
-                StringBuilder appContext = new StringBuilder("\n\nACTUAL_INSTALLED_APPS_ON_THIS_TV. Use only exact packageName values below for launch_app; never guess package names. If the requested app is not listed, say so.\n");
-                int contextLimit = Math.max(0, 3800 - contextualMessage.length());
-                for (int i = 0; i < installedApps.length() && i < 80; i++) {
-                    JSONObject app = installedApps.optJSONObject(i);
-                    if (app == null) continue;
-                    String line = app.optString("name") + " | " + app.optString("packageName") + "\n";
-                    if (appContext.length() + line.length() > contextLimit) break;
-                    appContext.append(line);
+                // App inventory is useful for app-specific commands, but wastes input tokens on unrelated questions.
+                String normalizedContextRequest = normalize(contextualMessage);
+                boolean needsAppInventory = has(normalizedContextRequest,
+                        "افتح", "شغل", "تشغيل", "تطبيق", "التطبيقات", "برنامج", "برامج",
+                        "مثبت", "مثبته", "صلاحيات", "اذونات", "فحص التطبيقات", "مراجعه التطبيقات",
+                        "app", "apps", "installed", "launch", "package", "audit");
+                String messageWithContext = contextualMessage;
+                if (needsAppInventory) {
+                    JSONArray installedApps = getInstalledLaunchableAppsJson();
+                    StringBuilder appContext = new StringBuilder("\n\nACTUAL_INSTALLED_APPS_ON_THIS_TV. Use only exact packageName values below for launch_app; never guess package names. If the requested app is not listed, say so.\n");
+                    int contextLimit = Math.max(0, 2200 - contextualMessage.length());
+                    for (int i = 0; i < installedApps.length() && i < 60; i++) {
+                        JSONObject app = installedApps.optJSONObject(i);
+                        if (app == null) continue;
+                        String line = app.optString("name") + " | " + app.optString("packageName") + "\n";
+                        if (appContext.length() + line.length() > contextLimit) break;
+                        appContext.append(line);
+                    }
+                    messageWithContext += appContext.toString();
                 }
-                payload.put("message", contextualMessage + appContext.toString());
+                payload.put("message", messageWithContext);
                 stage = "sending_request";
                 runOnUiThread(() -> setStatus("Sending command… / إرسال الأمر…"));
                 try (OutputStream out = connection.getOutputStream()) {
@@ -766,13 +1024,36 @@ public class MainActivity extends Activity {
                 JSONObject result = new JSONObject(new String(buffer.toByteArray(), StandardCharsets.UTF_8));
                 if (code != 200) {
                     String error = result.optString("error", "http_" + code);
-                    runOnUiThread(() -> reply("تعذر الاتصال بالمساعد: " + error + " (" + code + ")"));
+                    String retryAfter = result.optString("retryAfter", "");
+                    String providerMessage = result.optString("providerMessage", "");
+                    String remainingRequests = result.optString("remainingRequests", "");
+                    String remainingTokens = result.optString("remainingTokens", "");
+                    String resetRequests = result.optString("resetRequests", "");
+                    String resetTokens = result.optString("resetTokens", "");
+                    String messageText = "تعذر الاتصال بالمساعد: " + error + " (" + code + ")";
+                    if (code == 429 && "provider_rate_limited".equals(error)) {
+                        long waitMs = parseGroqWaitMs(retryAfter, providerMessage);
+                        getSharedPreferences("assistant_settings", MODE_PRIVATE).edit()
+                                .putLong("groq_cooldown_until", System.currentTimeMillis() + waitMs).apply();
+                        messageText = "Groq وصل إلى حد الاستخدام. أوقفت إعادة المحاولة مؤقتًا. انتظر " + ((waitMs + 999L) / 1000L) + " ثانية ثم حاول. ";
+                        if (!providerMessage.isEmpty() && !"null".equals(providerMessage)) messageText += providerMessage + " ";
+                        if (!retryAfter.isEmpty() && !"null".equals(retryAfter)) messageText += "وقت الانتظار: " + retryAfter + ". ";
+                        if (!remainingRequests.isEmpty() && !"null".equals(remainingRequests)) messageText += "الطلبات المتبقية: " + remainingRequests + ". ";
+                        if (!remainingTokens.isEmpty() && !"null".equals(remainingTokens)) messageText += "التوكنات المتبقية: " + remainingTokens + ". ";
+                        if (!resetRequests.isEmpty() && !"null".equals(resetRequests)) messageText += "إعادة ضبط الطلبات: " + resetRequests + ". ";
+                        if (!resetTokens.isEmpty() && !"null".equals(resetTokens)) messageText += "إعادة ضبط التوكنات: " + resetTokens + ". ";
+                    } else if (code == 429 && "rate_limited".equals(error)) {
+                        messageText = "تم إرسال طلبات متقاربة جدًا. انتظر قليلًا ثم حاول مرة أخرى.";
+                    }
+                    final String userMessage = messageText;
+                    runOnUiThread(() -> reply(userMessage));
                     return;
                 }
                 String answer = result.optString("text", "");
                 JSONArray calls = result.optJSONArray("toolCalls");
                 runOnUiThread(() -> {
                     if (!answer.isEmpty()) {
+                        saveCachedAiAnswer(normalize(originalMessage), answer);
                         android.content.SharedPreferences history =
                                 getSharedPreferences("assistant_conversation", MODE_PRIVATE);
                         boolean continuation = isContinuationRequest(normalize(originalMessage));
@@ -802,6 +1083,7 @@ public class MainActivity extends Activity {
                 }
             } finally {
                 if (connection != null) connection.disconnect();
+                aiRequestInProgress = false;
             }
         });
     }
