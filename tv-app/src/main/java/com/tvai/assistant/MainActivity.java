@@ -409,12 +409,16 @@ public class MainActivity extends Activity {
         // Accept common Egyptian Arabic voice-recognition variants so live data
         // requests are routed to /v1/info instead of consuming a Groq completion.
         boolean asksWeather = has(normalized, "الطقس", "طقس", "الجو", "حاله الجو",
-                "حاله الطقس", "درجه الحراره", "درجه الحرارة", "الحراره", "الحرارة",
-                "الجو عامل", "weather", "temperature", "forecast");
+                "حاله الطقس", "حاله الطقس اليوم", "درجه الحراره", "درجه الحرارة",
+                "الحراره", "الحرارة", "الجو عامل", "الجو في", "الجو النهارده",
+                "الجو اليوم", "weather", "temperature", "forecast");
         boolean asksGold = has(normalized, "الذهب", "ذهب", "الدهب", "دهب",
                 "سعر جرام الذهب", "جرام الذهب", "جرام الدهب", "عيار 21", "عيار 24",
                 "عيار 18", "gold price", "gold rate");
-        boolean asksCurrency = has(normalized, "سعر الدولار", "الدولار اليوم", "سعر العمله", "سعر العملات", "exchange rate", "currency rate", "usd egp", "dollar today");
+        boolean asksCurrency = has(normalized, "الدولار", "دولار", "سعر العمله", "سعر العملات",
+                "العمله بكام", "الدولار بكام", "الدولار عامل كام", "بكام الدولار",
+                "الدولار النهارده", "سعر العمله اليوم", "سعر الصرف",
+                "exchange rate", "currency rate", "usd egp", "dollar today");
         boolean asksNews = has(normalized, "الاخبار", "اخبار", "اخر الاخبار", "news", "headlines");
         boolean asksSports = has(normalized, "مباريات", "مباراه", "مباراة", "جدول مباريات",
                 "مواعيد المباريات", "ماتشات", "ماتش", "الدوري المصري", "الدوري السعودي",
