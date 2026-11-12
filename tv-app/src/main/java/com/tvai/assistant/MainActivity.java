@@ -714,6 +714,20 @@ public class MainActivity extends Activity {
         String normalizedRequest = normalize(message);
         final String originalMessage = message;
         final String contextualMessage = buildConversationContext(message);
+
+        // Developer settings are a deterministic Android device action; do not spend AI quota.
+        boolean asksDeveloperSettings = has(normalizedRequest,
+                "وضع المطورين", "وضع المطور", "خيارات المطور", "خيارات المطورين",
+                "اعدادات المطور", "اعدادات وضع المطورين", "developer options", "developer mode");
+        boolean asksToOpen = has(normalizedRequest, "افتح", "فتح", "شغل", "launch", "open", "go to");
+        if (asksDeveloperSettings && asksToOpen) {
+            launchIntentWithFallback(
+                    new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS),
+                    new Intent(Settings.ACTION_SETTINGS),
+                    "Developer options",
+                    "فتحت خيارات المطورين إن كانت متاحة. إذا لم يدعم التلفزيون الصفحة مباشرة، افتح الإعدادات ثم تفضيلات الجهاز وابحث عن خيارات المطورين.");
+            return;
+        }
         if (tryHandleSleepTimerRequest(message, normalizedRequest)) return;
         if (tryHandleLocalAudioCommand(normalizedRequest)) return;
         if (tryHandleLiveInfo(message, normalizedRequest)) return;
