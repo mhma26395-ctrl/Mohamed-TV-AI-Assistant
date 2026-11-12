@@ -877,10 +877,20 @@ public class MainActivity extends Activity {
                 if (code != 200) {
                     String error = result.optString("error", "http_" + code);
                     String retryAfter = result.optString("retryAfter", "");
+                    String providerMessage = result.optString("providerMessage", "");
+                    String remainingRequests = result.optString("remainingRequests", "");
+                    String remainingTokens = result.optString("remainingTokens", "");
+                    String resetRequests = result.optString("resetRequests", "");
+                    String resetTokens = result.optString("resetTokens", "");
                     String messageText = "تعذر الاتصال بالمساعد: " + error + " (" + code + ")";
                     if (code == 429 && "provider_rate_limited".equals(error)) {
-                        messageText = "الخدمة مشغولة حاليًا بسبب حد الطلبات لدى مزود الذكاء الاصطناعي. انتظر قليلًا ثم حاول مرة واحدة.";
-                        if (!retryAfter.isEmpty() && !"null".equals(retryAfter)) messageText += " إشارة الانتظار من المزود: " + retryAfter + ".";
+                        messageText = "Groq رفض الطلب بسبب أحد حدود الاستخدام. ";
+                        if (!providerMessage.isEmpty() && !"null".equals(providerMessage)) messageText += providerMessage + " ";
+                        if (!retryAfter.isEmpty() && !"null".equals(retryAfter)) messageText += "وقت الانتظار: " + retryAfter + ". ";
+                        if (!remainingRequests.isEmpty() && !"null".equals(remainingRequests)) messageText += "الطلبات المتبقية: " + remainingRequests + ". ";
+                        if (!remainingTokens.isEmpty() && !"null".equals(remainingTokens)) messageText += "التوكنات المتبقية: " + remainingTokens + ". ";
+                        if (!resetRequests.isEmpty() && !"null".equals(resetRequests)) messageText += "إعادة ضبط الطلبات: " + resetRequests + ". ";
+                        if (!resetTokens.isEmpty() && !"null".equals(resetTokens)) messageText += "إعادة ضبط التوكنات: " + resetTokens + ". ";
                     } else if (code == 429 && "rate_limited".equals(error)) {
                         messageText = "تم إرسال طلبات متقاربة جدًا. انتظر قليلًا ثم حاول مرة أخرى.";
                     }
