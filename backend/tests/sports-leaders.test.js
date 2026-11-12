@@ -9,7 +9,7 @@ test("standings query uses SportScore and returns league rows with attribution",
     return new Response(JSON.stringify({ standings: [{ team: "Al Ahly", points: 10, position: 1 }] }), { status: 200 });
   });
   assert.match(url, /sport=football/);
-  assert.match(url, /slug=56ypq3nh01nmd7o/);
+  assert.match(url, /slug=egyptian-premier-league/);
   assert.match(url, /standings/);
   assert.equal(result.ok, true);
   assert.equal(result.rows[0].team, "Al Ahly");
