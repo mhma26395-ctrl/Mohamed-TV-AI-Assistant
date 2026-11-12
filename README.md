@@ -14,7 +14,7 @@ No payment is required to use the app. Thank you for your support ❤️
 
 The repository contains the TV application source and a Cloudflare Worker backend. The phone companion has been selected as the next product direction and its security/transport architecture is documented in [Phone Companion Architecture](docs/PHONE-COMPANION-ARCHITECTURE.md). The phone app is **not implemented or available as an APK yet**.
 
-The tested Android TV / Google TV APK is **0.6.9** (versionCode 21). The signed APK was built and signature-verified in GitHub Actions run [43003494402](https://github.com/mhma26395-ctrl/Mohamed-TV-AI-Assistant/actions/runs/43003494402). The release workflow can publish that exact tested artifact as a GitHub Release.
+The latest source on `main` includes the compact-window scrolling and BACK-key fixes, plus local command-routing improvements. The updated **0.6.9 debug APK** was built successfully in GitHub Actions run [43216456255](https://github.com/mhma26395-ctrl/Mohamed-TV-AI-Assistant/actions/runs/43216456255). Download its `Mohamed-TV-AI-Assistant-0.6.9-debug` artifact from the run page. This is the user-tested debug build; it is not a newly signed stable-release APK.
 
 ## Support the project
 
@@ -36,7 +36,7 @@ This project is licensed under the Apache License 2.0. See [LICENSE](LICENSE).
 
 ## Published APK
 
-The signed APK is published under GitHub **Releases** when the maintainer runs **Publish tested Mohamed TV AI Assistant release** from the Actions tab. The workflow republishes the already-tested and signed artifact from run 43003494402; it does not rebuild or change the APK.
+The existing signed APK in GitHub **Releases** is an older build and does not include the latest source changes. The latest updated debug APK is available from [the successful Actions run 43216456255](https://github.com/mhma26395-ctrl/Mohamed-TV-AI-Assistant/actions/runs/43216456255). Do not treat the older signed release as containing the latest fixes.
 
 ## Build the current TV debug APK
 
