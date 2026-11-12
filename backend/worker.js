@@ -817,8 +817,16 @@ export default {
     const raw = await upstream.json().catch(() => ({}));
     if (upstream.status === 429) {
       // Surface provider quota telemetry without exposing credentials or request content.
+      // Preserve Groq's quota classification so we can distinguish RPM, TPM, RPD and TPD.
+      // The upstream message is bounded and contains no credentials or user prompt.
+      const providerError = raw?.error || {};
+      const providerMessage = typeof providerError.message === "string"
+        ? providerError.message.slice(0, 300) : null;
       return json({
         error: "provider_rate_limited",
+        providerCode: typeof providerError.code === "string" ? providerError.code.slice(0, 80) : null,
+        providerType: typeof providerError.type === "string" ? providerError.type.slice(0, 80) : null,
+        providerMessage,
         retryAfter: upstream.headers.get("retry-after") || null,
         remainingRequests: upstream.headers.get("x-ratelimit-remaining-requests") || null,
         remainingTokens: upstream.headers.get("x-ratelimit-remaining-tokens") || null,
