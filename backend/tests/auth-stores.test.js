@@ -157,12 +157,15 @@ test("concurrent device registration cannot replace the first key", async () => 
   assert.ok(["A".repeat(100), "B".repeat(100)].includes(current.body.device.publicKey));
 });
 
-test("health endpoint exposes only basic service status", async () => {
+test("health endpoint reports readiness without exposing secrets", async () => {
   const response = await worker.fetch(new Request("https://unit.test/v1/health"), {});
   const result = await read(response);
   assert.equal(result.status, 200);
-  assert.equal(result.body.ok, true);
+  assert.equal(result.body.ok, false);
+  assert.equal(typeof result.body.readiness, "object");
+  assert.ok(Array.isArray(result.body.missing));
   assert.equal("secrets" in result.body, false);
+  assert.equal("DEEPSEEK_API_KEY" in result.body, false);
 });
 
 test("authentication endpoints fail closed when required configuration is missing", async () => {
