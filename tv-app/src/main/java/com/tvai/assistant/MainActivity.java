@@ -64,6 +64,14 @@ public class MainActivity extends Activity {
     protected TextView status, transcript, response;
     private SpeechRecognizer recognizer;
     private boolean speechListening = false;
+    private final Handler speechHandler = new Handler(Looper.getMainLooper());
+    private final Runnable speechResultTimeout = () -> {
+        if (speechListening && !isFinishing() && !isDestroyed()) {
+            speechListening = false;
+            resetSpeechRecognizer();
+            setStatus("انتهت مهلة التعرف على الصوت. يمكنك الآن المحاولة مرة أخرى أو كتابة الأمر.");
+        }
+    };
     private TextToSpeech tts;
     private boolean ttsReady = false;
     protected String speechLanguage = "ar-EG";
@@ -297,12 +305,13 @@ public class MainActivity extends Activity {
 
         speechListening = true;
         recognizer.setRecognitionListener(new RecognitionListener() {
-            public void onReadyForSpeech(Bundle p) { setStatus("Listening… / أستمع إليك…"); }
+            public void onReadyForSpeech(Bundle p) { speechHandler.removeCallbacks(speechResultTimeout); setStatus("Listening… / أستمع إليك…"); }
             public void onBeginningOfSpeech() { setStatus("تم التقاط صوتك… أكمل كلامك."); }
             public void onRmsChanged(float r) {}
             public void onBufferReceived(byte[] b) {}
-            public void onEndOfSpeech() { setStatus("Processing… / جاري معالجة الصوت…"); }
+            public void onEndOfSpeech() { setStatus("Processing… / جاري معالجة الصوت…"); speechHandler.removeCallbacks(speechResultTimeout); speechHandler.postDelayed(speechResultTimeout, 15000); }
             public void onError(int error) {
+                speechHandler.removeCallbacks(speechResultTimeout);
                 speechListening = false;
                 String message;
                 switch (error) {
@@ -333,6 +342,7 @@ public class MainActivity extends Activity {
                 }
             }
             public void onResults(Bundle b) {
+                speechHandler.removeCallbacks(speechResultTimeout);
                 speechListening = false;
                 ArrayList<String> list = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                 if (list != null && !list.isEmpty() && list.get(0) != null && !list.get(0).trim().isEmpty()) {
@@ -479,7 +489,7 @@ public class MainActivity extends Activity {
             {"القاهرة","القاهره","cairo"}, {"لندن","london"}, {"لوس انجلوس","los angeles"},
             {"نيويورك","new york"}, {"باريس","paris"}, {"الرياض","riyadh"}, {"دبي","dubai"},
             {"مكه","مكة","mecca"}, {"طوكيو","tokyo"}, {"اسطنبول","istanbul"},
-            {"واشنطن","واشنطون","واشنطن دي سي","وانشنطن","وانشنز","washington","washington dc"}
+            {"واشنطن","واشنطون","واشنطن دي سي","وانشنطن","وانشنط","وانشنز","واشنط","washington","washington dc"}
         };
         for (String[] group : cities) for (String city : group) {
             if (normalized.contains(city)) {
@@ -1738,6 +1748,7 @@ public class MainActivity extends Activity {
             Shizuku.removeRequestPermissionResultListener(shizukuPermissionResult);
         } catch (Exception ignored) {}
         network.shutdownNow();
+        speechHandler.removeCallbacks(speechResultTimeout);
         speechListening = false;
         if (recognizer != null) {
             try { recognizer.cancel(); recognizer.destroy(); } catch (Exception ignored) {}
