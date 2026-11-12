@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/deploy-production-worker.yml'
+      - 'backend/**'
   workflow_dispatch:
 
 permissions:
