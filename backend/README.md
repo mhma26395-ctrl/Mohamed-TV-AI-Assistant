@@ -4,16 +4,16 @@ This folder contains the first centralized AI backend scaffold for the Android T
 
 ## Architecture
 
-Android TV app → HTTPS Cloudflare Worker → Groq API
+Android TV app → HTTPS Cloudflare Worker → selected AI provider (Groq or DeepSeek)
 
-The Groq API key exists only as an encrypted Cloudflare Worker secret. The Android APK must never contain the provider key.
+Provider API keys exist only as encrypted Cloudflare Worker secrets. The Android APK must never contain a provider key.
 
 ## Provider and model
 
-- Provider: GroqCloud
-- Starting model: `openai/gpt-oss-120b`
-- The model ID is configurable through the `GROQ_MODEL` Worker variable.
-- The API uses Groq's OpenAI-compatible Chat Completions endpoint and local function/tool calling.
+- Production defaults to Groq with `GROQ_MODEL=openai/gpt-oss-120b` and the encrypted `GROQ_API_KEY` secret.
+- The isolated staging Worker selects DeepSeek with `AI_PROVIDER=deepseek`, `DEEPSEEK_MODEL=deepseek-flash`, and the encrypted `DEEPSEEK_API_KEY` secret.
+- DeepSeek uses its OpenAI-compatible Chat Completions endpoint in non-thinking mode with function tools enabled.
+- Set `AI_PROVIDER` to `groq` or `deepseek` per Worker environment. The matching provider secret must exist; missing keys fail closed with `server_not_configured`.
 - The response preserves the app-facing contract: `ok`, `provider`, `model`, `text`, `toolCalls`, and `finishReason`.
 
 The selected model is a starting point, not a promise of unlimited free service. Groq publishes model-specific limits, and free-tier availability/quotas can change. Stay on the free plan, monitor the account's limits, and do not enable paid billing or upgrade. When a quota is reached, requests may be rejected with HTTP 429 until the quota resets. There is no automatic paid-provider fallback.
@@ -40,10 +40,11 @@ This project must remain on free tiers only. Do not add paid services, enable au
 ## Deploy preparation
 
 1. Create a Cloudflare account and a GroqCloud account, and confirm that the selected model is available on the account's free plan.
-2. In Cloudflare Worker settings, add encrypted secrets:
-   - `GROQ_API_KEY`
-   - `APP_ACCESS_TOKEN` (temporary only; do not distribute it in the APK)
-3. Keep `GROQ_MODEL` set to `openai/gpt-oss-120b` unless a free-tier alternative has been tested and selected.
+2. In Cloudflare Worker settings, add encrypted secrets for the selected environment:
+   - Production (Groq): `GROQ_API_KEY`
+   - Staging (DeepSeek): `DEEPSEEK_API_KEY`
+   - Keep `SESSION_SIGNING_SECRET` and the device-auth secrets configured separately for each Worker environment.
+3. Keep production on Groq by leaving `AI_PROVIDER` unset (defaults to `groq`). Staging is configured to use `deepseek-flash`; do not switch production until staging tests pass.
 4. Configure a rate limiting binding named `RATE_LIMITER`.
 5. Deploy and test `GET /v1/health`.
 6. Do not connect the Android APK until per-device authentication is implemented.
