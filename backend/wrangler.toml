@@ -64,6 +64,9 @@ new_sqlite_classes = ["SecurityEventStore"]
 workers_dev = true
 
 [env.staging.vars]
+# Isolated staging uses DeepSeek Flash; production continues to default to Groq.
+AI_PROVIDER = "deepseek"
+DEEPSEEK_MODEL = "deepseek-flash"
 GROQ_MODEL = "openai/gpt-oss-120b"
 
 [[env.staging.ratelimits]]
