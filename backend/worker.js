@@ -386,6 +386,41 @@ export async function getSportsInfo(leagueKey, dateValue, locale, fetcher = fetc
   };
 }
 
+const SPORT_SCORE_SLUGS = {
+  "egyptian-premier-league": "56ypq3nh01nmd7o",
+  "saudi-pro-league": "j1l4rjnh66nm7vx",
+  "english-premier-league": "jednm9whz0ryox8",
+  "spanish-la-liga": "vl7oqdehlyr510j"
+};
+
+export async function getSportsLeadersInfo(leagueKey, stat = "standings", fetcher = fetch) {
+  const league = SPORTS_LEAGUES[leagueKey];
+  const slug = SPORT_SCORE_SLUGS[leagueKey];
+  if (!league || !slug || !["standings", "scorers", "assists"].includes(stat)) {
+    return { ok: false, error: "unsupported_sports_query" };
+  }
+  const endpoint = stat === "standings" ? "standings" : "topscorers";
+  const params = new URLSearchParams({ sport: "football", slug, src: "mohamed-tv-ai-assistant" });
+  if (stat !== "standings") { params.set("limit", "20"); params.set("stat", stat === "assists" ? "assists" : "goals"); }
+  let response;
+  try {
+    response = await fetcher("https://sportscore.com/api/widget/" + endpoint + "/?" + params.toString(), {
+      signal: AbortSignal.timeout(12000), headers: { accept: "application/json" }
+    });
+  } catch (error) {
+    throw new Error(error?.name === "TimeoutError" || error?.name === "AbortError" ? "sports_stats_timeout" : "sports_stats_network_error");
+  }
+  if (!response.ok) throw new Error("sports_stats_http_" + response.status);
+  const data = await response.json();
+  const rows = stat === "standings"
+    ? (data.standings || data.table || data.rows || data.data || [])
+    : (data.players || data.topscorers || data.topScorers || data.data || []);
+  if (!Array.isArray(rows)) throw new Error("sports_stats_invalid_response");
+  return { ok: true, type: "sports_stats", stat, league: league.name, rows: rows.slice(0, 20),
+    source: "SportScore", attribution: "Powered by SportScore",
+    note: "بيانات رياضية خارجية؛ قد تختلف التغطية وتوقيت التحديث حسب المسابقة." };
+}
+
 async function getNewsInfo(query, locale) {
   const q = cleanLocation(query || "Egypt");
   const params = new URLSearchParams({
