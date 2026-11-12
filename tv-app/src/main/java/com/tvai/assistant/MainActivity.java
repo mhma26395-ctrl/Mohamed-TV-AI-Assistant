@@ -323,6 +323,10 @@ public class MainActivity extends Activity {
         if (has(c, "wifi", "wi-fi", "واي فاي", "الشبكه", "اعدادات الشبكه", "network settings", "internet settings")) {
             launchIntent(new Intent(Settings.ACTION_WIFI_SETTINGS), "Network settings"); return;
         }
+        if (has(c, "مساحه التخزين الداخليه", "مساحة التخزين الداخلية", "التخزين الداخلي",
+                "مساحه التخزين", "مساحة التخزين", "internal storage", "storage space", "storage info")) {
+            reply(getStorageReport()); return;
+        }
         if (has(c, "developer options", "developer mode", "وضع المطورين", "وضع المطور", "خيارات المطور", "خيارات المطورين", "اعدادات المطور")) {
             launchIntent(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS), "Developer options",
                     "تم فتح خيارات المطورين. بعض الخيارات تحتاج تفعيلًا يدويًا. / Developer options opened. Some options must be enabled manually.");
@@ -416,7 +420,8 @@ public class MainActivity extends Activity {
             else if (has(normalized, "القاهره", "القاهرة")) city = "Cairo";
             else city = "Egypt";
         }
-        if ((asksTime || asksWeather) && city.isEmpty()) {
+        if (asksWeather && city.isEmpty()) city = "Cairo";
+        if (asksTime && city.isEmpty()) {
             reply("حدد المدينة من فضلك، مثل القاهرة أو لندن أو لوس أنجلوس.");
             return true;
         }
@@ -715,13 +720,21 @@ public class MainActivity extends Activity {
         final String originalMessage = message;
         final String contextualMessage = buildConversationContext(message);
 
-        // Route explicit developer-settings requests locally before any Groq/backend call.
-        boolean asksToOpenDeveloperSettings = has(normalizedRequest,
-                "افتح", "فتح", "شغل", "اذهب الى", "اذهب الي", "open", "launch", "go to")
-                && has(normalizedRequest,
-                "وضع المطورين", "وضع المطور", "خيارات المطور", "خيارات المطورين",
-                "اعدادات المطور", "developer options", "developer mode");
-        if (asksToOpenDeveloperSettings) {
+        // Keep common TV controls and device queries independent from AI availability.
+        boolean explicitOpen = has(normalizedRequest,
+                "افتح", "فتح", "شغل", "شغللي", "اذهب الى", "اذهب الي", "open", "launch", "start", "go to");
+        boolean asksForLocalStorage = has(normalizedRequest,
+                "مساحه التخزين الداخليه", "مساحة التخزين الداخلية", "التخزين الداخلي",
+                "مساحه التخزين", "مساحة التخزين", "internal storage", "storage space", "storage info");
+        boolean asksForLocalTvTarget = explicitOpen && has(normalizedRequest,
+                "يوتيوب", "youtube", "داونلودر", "downloader", "جوجل بلاي", "google play", "play store",
+                "الاعدادات", "اعدادات", "الضبط", "settings", "وضع المطورين", "وضع المطور",
+                "خيارات المطور", "خيارات المطورين", "developer options", "developer mode");
+        if (asksForLocalStorage) {
+            reply(getStorageReport());
+            return;
+        }
+        if (asksForLocalTvTarget) {
             handleCommand(message);
             return;
         }
