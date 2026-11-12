@@ -317,8 +317,14 @@ async function getSportsInfo(leagueKey, dateValue, locale) {
       .format(new Date()).replace(/-/g, "");
   const url = "https://site.api.espn.com/apis/site/v2/sports/soccer/" +
     league.code + "/scoreboard?dates=" + date;
-  const response = await fetch(url, { signal: AbortSignal.timeout(12000), headers: { "accept": "application/json" } });
-  if (!response.ok) throw new Error("sports_provider_unavailable");
+  let response;
+  try {
+    response = await fetch(url, { signal: AbortSignal.timeout(12000), headers: { "accept": "application/json" } });
+  } catch (error) {
+    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+    throw new Error(timedOut ? "sports_provider_timeout" : "sports_provider_network_error");
+  }
+  if (!response.ok) throw new Error("sports_provider_http_" + response.status);
   const data = await response.json();
   const events = Array.isArray(data.events) ? data.events : [];
   const matches = events.map(event => {
