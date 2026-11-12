@@ -839,6 +839,38 @@ public class MainActivity extends Activity {
         return Math.max(10L, Math.min(seconds, 86400L)) * 1000L;
     }
 
+    private boolean isCacheableAiQuestion(String normalized) {
+        return !has(normalized, "اليوم", "النهارده", "دلوقتي", "حاليا", "الان", "الآن",
+                "سعر", "الطقس", "الجو", "الاخبار", "مباريات", "الوقت", "الساعه",
+                "today", "now", "current", "weather", "price", "news", "match", "score");
+    }
+
+    private String cachedAiAnswer(String normalized) {
+        if (!isCacheableAiQuestion(normalized)) return null;
+        String key = "answer_" + Integer.toHexString(normalized.hashCode());
+        android.content.SharedPreferences cache = getSharedPreferences("assistant_answer_cache", MODE_PRIVATE);
+        long savedAt = cache.getLong(key + "_time", 0L);
+        if (savedAt <= 0L || System.currentTimeMillis() - savedAt > 10L * 60L * 1000L) return null;
+        String answer = cache.getString(key, null);
+        return answer == null || answer.trim().isEmpty() ? null : answer;
+    }
+
+    private void saveCachedAiAnswer(String normalized, String answer) {
+        if (!isCacheableAiQuestion(normalized) || answer == null || answer.trim().isEmpty()
+                || answer.length() > 5000) return;
+        String key = "answer_" + Integer.toHexString(normalized.hashCode());
+        getSharedPreferences("assistant_answer_cache", MODE_PRIVATE).edit()
+                .putString(key, answer).putLong(key + "_time", System.currentTimeMillis()).apply();
+    }
+
+    private boolean tryHandleLocalStorageQuestion(String normalized) {
+        if (!has(normalized, "مساحه التخزين", "مساحة التخزين", "التخزين الداخلي",
+                "المساحه الداخليه", "المساحة الداخلية", "internal storage", "storage space",
+                "how much storage", "available storage")) return false;
+        reply(getStorageReport());
+        return true;
+    }
+
     protected void sendToAi(String message) {
         if (aiRequestInProgress) {
             reply("هناك طلب جارٍ بالفعل. انتظر الرد الحالي قبل إرسال سؤال آخر / Please wait for the current answer before sending another request.");
@@ -851,7 +883,14 @@ public class MainActivity extends Activity {
         if (tryHandleLocalOpenCommand(message, normalizedRequest)) { aiRequestInProgress = false; return; }
         if (tryHandleSleepTimerRequest(message, normalizedRequest)) { aiRequestInProgress = false; return; }
         if (tryHandleLocalAudioCommand(normalizedRequest)) { aiRequestInProgress = false; return; }
+        if (tryHandleLocalStorageQuestion(normalizedRequest)) { aiRequestInProgress = false; return; }
         if (tryHandleLiveInfo(message, normalizedRequest)) { aiRequestInProgress = false; return; }
+        String cachedAnswer = cachedAiAnswer(normalizedRequest);
+        if (cachedAnswer != null) {
+            reply(cachedAnswer + "\n\n(إجابة محفوظة مؤقتًا لتقليل استهلاك الطلبات)");
+            aiRequestInProgress = false;
+            return;
+        }
         if (tryHandleYouTubeSearch(message, normalizedRequest)) { aiRequestInProgress = false; return; }
         if (has(normalizedRequest,
                 "التطبيقات اللي شغاله في الخلفيه", "التطبيقات الشغاله في الخلفيه",
@@ -946,6 +985,7 @@ public class MainActivity extends Activity {
                 JSONArray calls = result.optJSONArray("toolCalls");
                 runOnUiThread(() -> {
                     if (!answer.isEmpty()) {
+                        saveCachedAiAnswer(normalize(originalMessage), answer);
                         android.content.SharedPreferences history =
                                 getSharedPreferences("assistant_conversation", MODE_PRIVATE);
                         boolean continuation = isContinuationRequest(normalize(originalMessage));
