@@ -414,7 +414,7 @@ export async function getSportsLeadersInfo(leagueKey, stat = "standings", fetche
   const data = await response.json();
   const candidates = stat === "standings"
     ? [data.standings, data.table, data.rows, data.data?.standings, data.data?.table, data.data?.rows, data.data, ...(Array.isArray(data.tables) ? [data.tables.flatMap(group => group.rows || [])] : [])]
-    : [data.players, data.topscorers, data.topScorers, data.data?.players, data.data?.topscorers, data.data?.topScorers, data.data];
+    : [data.players, data.scorers, data.topscorers, data.topScorers, data.data?.players, data.data?.scorers, data.data?.topscorers, data.data?.topScorers, data.data];
   let rows = candidates.find(Array.isArray);
   if (!rows && stat === "standings" && Array.isArray(data.groups)) rows = data.groups.flatMap(group => group.table || group.rows || []);
   if (!Array.isArray(rows)) throw new Error("sports_stats_invalid_response");
@@ -437,7 +437,7 @@ export async function getSportsLeadersInfo(leagueKey, stat = "standings", fetche
       goalDifference: value(["goalDifference", "goal_difference", "gd"]), points: value(["points", "pts"])
     };
     return {
-      position: value(["position", "rank", "place"]) ?? index + 1,
+      position: value(["position", "rank", "place", "pos"]) ?? index + 1,
       player: typeof player === "string" ? player : (player.name || player.displayName || item?.player_name || item?.name || "غير معروف"),
       team: typeof team === "string" ? team : (team.name || team.displayName || item?.team_name || ""),
       goals: value(["goals", "goal", "total_goals"]), assists: value(["assists", "assist", "total_assists"]),
