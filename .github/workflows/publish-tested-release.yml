@@ -1,11 +1,6 @@
 name: Build and publish signed Mohamed TV AI Assistant release
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'tv-app/build.gradle'
-      - '.github/workflows/publish-tested-release.yml'
   workflow_dispatch:
 
 permissions:
