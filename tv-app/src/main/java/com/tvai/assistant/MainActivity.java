@@ -1,3 +1,4 @@
+// Live-info routing release 0.7.2: EUR, Saudi time and Arabic league voice normalization.
 package com.tvai.assistant;
 
 import android.Manifest;
