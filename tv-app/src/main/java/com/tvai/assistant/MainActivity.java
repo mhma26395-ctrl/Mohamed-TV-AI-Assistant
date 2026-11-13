@@ -497,7 +497,7 @@ public class MainActivity extends Activity {
             else city = "Egypt";
         }
         if (asksWeather && city.isEmpty()) city = "Cairo";
-        if (asksTime && city.isEmpty() && has(normalized, "السعوديه", "السعودية", "السعوديه العربيه", "saudi arabia")) city = "Riyadh";
+        if (asksTime && has(normalized, "السعوديه", "السعودية", "السعوديه العربيه", "saudi arabia")) city = "Riyadh";
         if (asksTime && city.isEmpty()) {
             reply("حدد المدينة من فضلك، مثل القاهرة أو لندن أو الرياض.");
             return true;
@@ -523,8 +523,8 @@ public class MainActivity extends Activity {
             try {
                 connection = (HttpURLConnection) new URL(INFO_API_URL).openConnection();
                 connection.setRequestMethod("POST");
-                connection.setConnectTimeout(15000);
-                connection.setReadTimeout(25000);
+                connection.setConnectTimeout(20000);
+                connection.setReadTimeout(45000);
                 connection.setDoOutput(true);
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
                 String sessionToken = DeviceAuth.getSessionToken(this);
@@ -535,12 +535,14 @@ public class MainActivity extends Activity {
                 if ("sports".equals(type)) {
                     payload.put("league", sportsLeague);
                     java.text.SimpleDateFormat dayFormat = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US);
+                    dayFormat.setTimeZone(java.util.TimeZone.getTimeZone("Africa/Cairo"));
                     payload.put("date", dayFormat.format(new java.util.Date()));
                 }
                 if ("time".equals(type) || "weather".equals(type) || "news".equals(type)) payload.put("location", queryLocation);
                 if ("currency".equals(type)) {
                     boolean euro = has(normalized, "اليورو", "euro", "eur");
-                    payload.put("from", euro ? "EUR" : "USD");
+                    boolean poundSterling = has(normalized, "الاسترليني", "الجنيه الاسترليني", "pound sterling", "gbp");
+                    payload.put("from", euro ? "EUR" : poundSterling ? "GBP" : "USD");
                     payload.put("to", "EGP");
                 }
                 if ("gold".equals(type)) payload.put("currency", "EGP");
