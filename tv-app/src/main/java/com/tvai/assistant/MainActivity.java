@@ -357,7 +357,10 @@ public class MainActivity extends Activity {
         s = s.replace("في بي ان", " vpn ").replace("في بي اين", " vpn ")
                 .replace("vee pee en", " vpn ").replace("v p n", " vpn ")
                 .replace("داون لودر", "داونلودر");
-        return s.replaceAll("\\s+", " ").trim();
+        String normalized = s.replaceAll("\\s+", " ").trim();
+        // Correct common Arabic speech-recognition substitutions before live-info routing.
+        return normalized.replace("الدوري البصري", "الدوري المصري")
+                .replace("الدوري المصرى", "الدوري المصري");
     }
 
     private boolean has(String text, String... terms) {
