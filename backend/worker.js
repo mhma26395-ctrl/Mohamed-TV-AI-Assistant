@@ -129,6 +129,7 @@ const CITY_TIMEZONES = {
   "new york": "America/New_York", "نيو york": "America/New_York",
   "paris": "Europe/Paris", "باريس": "Europe/Paris",
   "riyadh": "Asia/Riyadh", "الرياض": "Asia/Riyadh",
+  "السعودية": "Asia/Riyadh", "السعوديه": "Asia/Riyadh", "saudi arabia": "Asia/Riyadh",
   "dubai": "Asia/Dubai", "دبي": "Asia/Dubai",
   "mecca": "Asia/Riyadh", "مكه": "Asia/Riyadh", "مكة": "Asia/Riyadh",
   "tokyo": "Asia/Tokyo", "طوكيو": "Asia/Tokyo",
@@ -327,8 +328,24 @@ async function getSportsInfo(leagueKey, dateValue, locale) {
       .format(new Date()).replace(/-/g, "");
   const url = "https://site.api.espn.com/apis/site/v2/sports/soccer/" +
     league.code + "/scoreboard?dates=" + date;
-  const response = await fetch(url, { signal: AbortSignal.timeout(12000), headers: { "accept": "application/json" } });
-  if (!response.ok) throw new Error("sports_provider_unavailable");
+  // ESPN occasionally returns transient gateway/timeout responses. Retry once
+  // with a fresh request before reporting that live scores are unavailable.
+  let response;
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      response = await fetch(url, {
+        signal: AbortSignal.timeout(attempt === 0 ? 10000 : 14000),
+        headers: { "accept": "application/json" }
+      });
+      if (response.ok) break;
+      lastError = new Error("sports_provider_http_" + response.status);
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 350));
+  }
+  if (!response?.ok) throw new Error("sports_provider_unavailable:" + (lastError?.message || "timeout"));
   const data = await response.json();
   const events = Array.isArray(data.events) ? data.events : [];
   const matches = events.map(event => {
