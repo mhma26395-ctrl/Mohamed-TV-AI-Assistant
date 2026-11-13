@@ -6,7 +6,7 @@ on:
     paths:
       - 'tv-app/src/main/java/com/tvai/assistant/MainActivity.java'
       - 'tv-app/build.gradle'
-      - '.github/workflows/publish-v0.7.2.yml'
+      - '.github/workflows/publish-v0.7.1.yml'
   workflow_dispatch:
 
 permissions:
@@ -79,7 +79,7 @@ jobs:
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
           AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
           "$APKSIGNER" verify --verbose "$APK"
-          "$AAPT" dump badging "$APK" | grep -q "package: name='com.tvai.assistant.next' versionCode='23' versionName='0.7.2'"
+          "$AAPT" dump badging "$APK" | grep -q "package: name='com.tvai.assistant.next' versionCode='24' versionName='0.7.2'"
           mkdir -p dist previous
           gh release download v0.7.1 --repo "$GITHUB_REPOSITORY" --pattern 'Mohamed-TV-AI-Assistant-0.7.1.apk' --dir previous
           OLD="previous/Mohamed-TV-AI-Assistant-0.7.1.apk"
