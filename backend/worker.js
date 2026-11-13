@@ -226,12 +226,22 @@ async function getCurrencyInfo(from, to) {
   const base = String(from || "USD").toUpperCase();
   const quote = String(to || "EGP").toUpperCase();
   if (!/^[A-Z]{3}$/.test(base) || !/^[A-Z]{3}$/.test(quote)) return { ok: false, error: "invalid_currency" };
-  const response = await fetch("https://api.frankfurter.app/latest?from=" + base + "&to=" + quote, { signal: AbortSignal.timeout(12000) });
+  // Use Frankfurter v2: unlike the legacy v1 ECB-only feed, v2 includes
+  // additional provider coverage for currencies such as EGP.
+  const response = await fetch(
+    "https://api.frankfurter.dev/v2/rate/" + base.toLowerCase() + "/" + quote.toLowerCase(),
+    { signal: AbortSignal.timeout(12000) }
+  );
   if (!response.ok) throw new Error("exchange_rate_provider_unavailable");
   const data = await response.json();
-  const rate = data.rates?.[quote];
-  if (typeof rate !== "number") return { ok: false, error: "currency_pair_unavailable", from: base, to: quote };
-  return { ok: true, type: "currency", from: base, to: quote, rate, date: data.date, source: "Frankfurter (reference exchange rates)", note: "Reference rate; bank, cash-market and card rates may differ." };
+  const rate = Number(data?.rate);
+  if (!Number.isFinite(rate) || rate <= 0) return { ok: false, error: "currency_pair_unavailable", from: base, to: quote };
+  return {
+    ok: true, type: "currency", from: base, to: quote, rate,
+    date: data.date || null,
+    source: "Frankfurter v2 (reference exchange rates)",
+    note: "Reference rate; bank, cash-market and card rates may differ."
+  };
 }
 
 export async function getGoldInfo(currency, fetcher = fetch) {
