@@ -368,6 +368,10 @@ public class MainActivity extends Activity {
     private void handleCommand(String raw) {
         String c = normalize(raw);
 
+        // Normalize common Arabic speech-recognition substitutions for live sports queries.
+        c = c.replace("الدوري البصري", "الدوري المصري")
+                .replace("الدوري المصرى", "الدوري المصري")
+                .replace("السعوديه", "السعودية");
         if (has(c, "help", "مساعده", "ساعدني", "الاوامر")) {
             reply("Try: افتح يوتيوب، افتح داونلودر، افتح اعدادات VPN، افتح اعدادات اللغه، افتح اعدادات الشبكه، ارفع الصوت، اخفض الصوت. / Try: open YouTube, Downloader, VPN settings, language settings, network settings, volume up or down.");
             return;
@@ -447,7 +451,7 @@ public class MainActivity extends Activity {
     private String detectInfoCity(String normalized) {
         String[][] cities = {
             {"القاهرة","القاهره","cairo"}, {"لندن","london"}, {"لوس انجلوس","los angeles"},
-            {"نيويورك","new york"}, {"باريس","paris"}, {"الرياض","riyadh"}, {"دبي","dubai"},
+            {"نيويورك","new york"}, {"باريس","paris"}, {"الرياض","riyadh"}, {"السعوديه","السعودية","السعوديه العربيه","saudi arabia","riyadh"}, {"دبي","dubai"},
             {"مكه","مكة","mecca"}, {"طوكيو","tokyo"}, {"اسطنبول","istanbul"}
         };
         for (String[] group : cities) for (String city : group) {
@@ -473,8 +477,8 @@ public class MainActivity extends Activity {
     private boolean tryHandleLiveInfo(String raw, String normalized) {
         boolean asksTime = has(normalized, "الوقت", "الساعه كام", "كم الساعه", "time now", "current time", "what time");
         boolean asksWeather = has(normalized, "الطقس", "الجو", "درجه الحراره", "حاله الطقس", "weather", "temperature", "forecast");
-        boolean asksGold = has(normalized, "الذهب", "سعر الذهب", "gold price", "gold rate");
-        boolean asksCurrency = has(normalized, "سعر الدولار", "الدولار اليوم", "سعر العمله", "سعر العملات", "exchange rate", "currency rate", "usd egp", "dollar today");
+        boolean asksGold = has(normalized, "الذهب", "سعر الذهب", "عيار 21", "عيار ٢١", "gold price", "gold rate");
+        boolean asksCurrency = has(normalized, "سعر الدولار", "الدولار اليوم", "سعر اليورو", "اليورو", "سعر الجنيه الاسترليني", "الاسترليني مقابل", "سعر العمله", "سعر العملات", "exchange rate", "currency rate", "usd egp", "eur egp", "euro", "dollar today");
         boolean asksNews = has(normalized, "الاخبار", "اخبار", "اخر الاخبار", "news", "headlines");
         boolean asksSports = has(normalized, "مباريات", "مباراه", "مباراة", "جدول مباريات",
                 "مواعيد المباريات", "ماتشات", "ماتش", "الدوري المصري", "الدوري السعودي",
@@ -490,15 +494,16 @@ public class MainActivity extends Activity {
             else city = "Egypt";
         }
         if (asksWeather && city.isEmpty()) city = "Cairo";
+        if (asksTime && city.isEmpty() && has(normalized, "السعوديه", "السعودية", "السعوديه العربيه", "saudi arabia")) city = "Riyadh";
         if (asksTime && city.isEmpty()) {
-            reply("حدد المدينة من فضلك، مثل القاهرة أو لندن أو لوس أنجلوس.");
+            reply("حدد المدينة من فضلك، مثل القاهرة أو لندن أو الرياض.");
             return true;
         }
 
         String selectedLeague = "";
         if (asksSports) {
             if (has(normalized, "المصري", "egyptian")) selectedLeague = "egyptian-premier-league";
-            else if (has(normalized, "السعودي", "saudi")) selectedLeague = "saudi-pro-league";
+            else if (has(normalized, "السعودي", "السعوديه", "saudi")) selectedLeague = "saudi-pro-league";
             else if (has(normalized, "الاسباني", "الإسباني", "la liga", "laliga")) selectedLeague = "spanish-la-liga";
             else if (has(normalized, "الانجليزي", "الإنجليزي", "premier league", "epl")) selectedLeague = "english-premier-league";
             else {
@@ -530,7 +535,11 @@ public class MainActivity extends Activity {
                     payload.put("date", dayFormat.format(new java.util.Date()));
                 }
                 if ("time".equals(type) || "weather".equals(type) || "news".equals(type)) payload.put("location", queryLocation);
-                if ("currency".equals(type)) { payload.put("from", "USD"); payload.put("to", "EGP"); }
+                if ("currency".equals(type)) {
+                    boolean euro = has(normalized, "اليورو", "euro", "eur");
+                    payload.put("from", euro ? "EUR" : "USD");
+                    payload.put("to", "EGP");
+                }
                 if ("gold".equals(type)) payload.put("currency", "EGP");
                 try (OutputStream out = connection.getOutputStream()) {
                     out.write(payload.toString().getBytes(StandardCharsets.UTF_8));
